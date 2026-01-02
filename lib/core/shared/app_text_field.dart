@@ -60,7 +60,7 @@ class AppTextField extends StatelessWidget {
 
         contentPadding: EdgeInsets.symmetric(
           horizontal: AppDimensions.paddingMiddle,
-          vertical: AppDimensions.paddingMiddle,
+          vertical: 16,
         ),
 
         suffixIcon: suffixIcon,

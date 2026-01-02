@@ -16,6 +16,11 @@ import 'package:supabase_flutter/supabase_flutter.dart' as _i454;
 import '../../feature/login/data/repository/auth_repository_impl.dart' as _i350;
 import '../../feature/login/domain/repository/auth_repository.dart' as _i704;
 import '../../feature/login/presentation/cubit/auth_cubit.dart' as _i899;
+import '../../feature/profile/data/repository/profile_repository_i.dart'
+    as _i663;
+import '../../feature/profile/domain/repository/profile_repository.dart'
+    as _i244;
+import '../../feature/profile/presentation/cubit/profile_cubit.dart' as _i499;
 import '../user/cubit/user_cubit.dart' as _i385;
 import '../user/data/repository/user_repository_i.dart' as _i852;
 import '../user/domain/repository/user_repository.dart' as _i329;
@@ -30,6 +35,9 @@ extension GetItInjectableX on _i174.GetIt {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
     final appModule = _$AppModule();
     gh.lazySingleton<_i454.SupabaseClient>(() => appModule.supabaseClient);
+    gh.lazySingleton<_i244.ProfileRepository>(
+      () => _i663.IProfileRepository(gh<_i454.SupabaseClient>()),
+    );
     gh.lazySingleton<_i329.UserRepository>(
       () => _i852.IUserRepository(gh<_i454.SupabaseClient>()),
     );
@@ -38,6 +46,9 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.singleton<_i385.UserCubit>(
       () => _i385.UserCubit(gh<_i329.UserRepository>()),
+    );
+    gh.factory<_i499.ProfileCubit>(
+      () => _i499.ProfileCubit(gh<_i244.ProfileRepository>()),
     );
     gh.lazySingleton<_i899.AuthCubit>(
       () => _i899.AuthCubit(gh<_i704.AuthRepository>()),

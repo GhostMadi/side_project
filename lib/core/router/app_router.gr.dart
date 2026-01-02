@@ -16,7 +16,7 @@ import 'package:side_project/feature/login/presentation/page/login_page.dart'
     as _i3;
 import 'package:side_project/feature/message/presentation/message_page.dart'
     as _i4;
-import 'package:side_project/feature/profile/presentation/profile_page.dart'
+import 'package:side_project/feature/profile/presentation/page/profile_page.dart'
     as _i5;
 import 'package:side_project/feature/register/presentation/page/register_page.dart'
     as _i6;
