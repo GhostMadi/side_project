@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:side_project/core/resources/app_colors.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
+import 'package:side_project/core/resources/color_settings/color_extension.dart';
 
 class AppTile extends StatelessWidget {
   final String title;

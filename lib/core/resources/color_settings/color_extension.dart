@@ -1,12 +1,5 @@
 import 'package:flutter/material.dart';
-
-// class AppColors {
-//   static Color primary = Colors.white;
-//   static Color secondary = Colors.black;
-//   static Color brand = Color(0xffB7F5FE);
-
-//   static Color strokeColor = Color(0xffBEBFBE);
-// }
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
 
 /// Доступ к кастомным цветам через context.appColors
 extension AppColorsX on BuildContext {
@@ -22,7 +15,7 @@ class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
   final Color brand; // акцент
   final Color third; // бордер/строки
   final Color fourth; // вторичный фон/disabled fill
-  final Color error; // вторичный фон/disabled fill
+  final Color error; // ошибка
 
   const AppColorsExtension({
     required this.primary,
@@ -33,6 +26,7 @@ class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
     required this.error,
   });
 
+  /// Фолбэк на случай ошибок (прозрачный)
   static const fallback = AppColorsExtension(
     primary: Colors.transparent,
     secondary: Colors.transparent,
@@ -42,24 +36,24 @@ class AppColorsExtension extends ThemeExtension<AppColorsExtension> {
     error: Colors.transparent,
   );
 
-  /// Светлая тема
-  static const light = AppColorsExtension(
-    primary: Colors.white,
-    secondary: Colors.black,
-    brand: Color(0xffB7F5FE),
-    third: Color(0xffBEBFBE),
-    fourth: Color(0xffDBDDE1),
-    error: Color(0xffFEB6B6),
+  /// СВЕТЛАЯ ТЕМА (Берет данные из AppColors.white)
+  static final light = AppColorsExtension(
+    primary: AppColors.white.primarySurface,
+    secondary: AppColors.white.mainText,
+    brand: AppColors.white.brand,
+    third: AppColors.white.border,
+    fourth: AppColors.white.secondaryFill,
+    error: AppColors.white.error,
   );
 
-  /// Тёмная тема
-  static const dark = AppColorsExtension(
-    primary: Colors.black,
-    secondary: Colors.white,
-    brand: Color(0xffB7F5FE), // если хочешь тот же brand и в dark
-    third: Color(0xffBEBFBE),
-    fourth: Color(0xff2A2A2A), // лучше темнее для dark, чем #DBDDE1
-    error: Color(0xffFEB6B6),
+  /// ТЁМНАЯ ТЕМА (Берет данные из AppColors.black)
+  static final dark = AppColorsExtension(
+    primary: AppColors.black.primarySurface,
+    secondary: AppColors.black.mainText,
+    brand: AppColors.black.brand,
+    third: AppColors.black.border,
+    fourth: AppColors.black.secondaryFill,
+    error: AppColors.black.error,
   );
 
   @override

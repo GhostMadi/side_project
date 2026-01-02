@@ -1,20 +1,22 @@
+import 'dart:developer';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:side_project/core/dependencies/get_it.dart';
-import 'package:side_project/core/resources/app_colors.dart';
-import 'package:side_project/core/resources/app_sizer.dart';
 import 'package:side_project/core/resources/app_svg.dart';
-import 'package:side_project/core/resources/app_text_style.dart';
+import 'package:side_project/core/resources/color_settings/color_extension.dart';
+import 'package:side_project/core/resources/dimension/app_dimension.dart';
+import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_button.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
 import 'package:side_project/feature/login/presentation/cubit/auth_cubit.dart';
-import 'package:sizer/sizer.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import 'package:side_project/feature/login/presentation/widget/link_button.dart';
 
-@RoutePage()
+@RoutePage() // Если нужен AutoRoute
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -26,13 +28,11 @@ class _LoginPageState extends State<LoginPage> {
   late final TextEditingController _loginController;
   late final TextEditingController _passwordController;
 
-  AuthCubit get _authCubit => sl<AuthCubit>();
-
   @override
   void initState() {
+    super.initState();
     _loginController = TextEditingController();
     _passwordController = TextEditingController();
-    super.initState();
   }
 
   @override
@@ -42,81 +42,122 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  final supabase = Supabase.instance.client;
-
   @override
   Widget build(BuildContext context) {
-    final appColors = context.appColors;
+    final colors = context.appColors;
 
-    return BlocConsumer<AuthCubit, AuthState>(
-      bloc: _authCubit,
-      listener: (context, state) {
-        state.maybeWhen(
-          authenticated: () {
-            context.router.replaceAll([const HomeRoute()]);
-          },
-          error: (message) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(message)));
-          },
-          orElse: () {},
-        );
-      },
-      builder: (context, state) {
-        final isLoading = state.maybeWhen(
-          loading: () => true,
-          orElse: () => false,
-        );
+    // 1. ПРОВАЙДЕР: Внедряем Cubit в дерево виджетов
+    return BlocProvider<AuthCubit>(
+      create: (context) => sl<AuthCubit>(),
+      child: BlocConsumer<AuthCubit, AuthState>(
+        // 2. LISTENER: Слушает события (навигация, ошибки)
+        listener: (context, state) {
+          state.maybeWhen(
+            authenticated: (user) {
+              // Успешный вход -> идем на главную
+              context.router.replaceAll([const HomeRoute()]);
+            },
+            error: (message) {
+              log(message);
+              // Ошибка -> показываем сообщение
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message), backgroundColor: colors.error),
+              );
+            },
+            orElse: () {},
+          );
+        },
+        // 3. BUILDER: Перерисовывает UI при загрузке
+        builder: (context, state) {
+          // Вычисляем, идет ли загрузка
+          final isLoading = state.maybeWhen(
+            loading: () => true,
+            orElse: () => false,
+          );
 
-        return Scaffold(
-          body: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSizer.horizontalDef),
-              child: SingleChildScrollView(
-                child: Column(
-                  spacing: 2.h,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(height: 20.h),
+          return Scaffold(
+            backgroundColor: colors.primary,
+            body: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppDimensions.paddingMiddle,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SvgPicture.asset(AppSvg.logo),
 
-                    SvgPicture.asset(AppSvg.logo),
-                    Text(
-                      'Please type your login and password \nto sign in',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyle.style(15, color: appColors.third),
-                    ),
+                      SizedBox(height: AppDimensions.spaceMiddle),
 
-                    AppTextField(
-                      controller: _loginController,
-                      hintText: 'Login',
-                    ),
-                    AppTextField(
-                      controller: _passwordController,
-                      hintText: 'Password',
-                    ),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        'forget password',
-                        style: AppTextStyle.style(15, color: appColors.third),
+                      Text(
+                        'Please type your login and password \nto sign in',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyle.base(16, color: colors.third),
                       ),
-                    ),
 
-                    AppButton(
-                      ixExpanded: true,
-                      label: 'Sign in',
-                      onPressed: () {},
-                    ),
-                  ],
+                      SizedBox(height: AppDimensions.spaceSenior),
+
+                      AppTextField(
+                        controller: _loginController,
+                        hintText: 'Login',
+                      ),
+
+                      SizedBox(height: AppDimensions.spaceMiddle),
+
+                      AppTextField(
+                        controller: _passwordController,
+                        hintText: 'Password',
+                        obscureText: true,
+                      ),
+
+                      SizedBox(height: AppDimensions.spaceHuge),
+
+                      // Обычная кнопка входа
+                      AppButton(
+                        text: 'Sign in',
+                        // Блокируем, если идет загрузка Google
+                        isLoading: isLoading,
+                        onPressed: () {
+                          // Пока просто принт, так как метод входа по email мы еще не писали в кубите
+                          print("Email Login: ${_loginController.text}");
+                        },
+                      ),
+
+                      SizedBox(height: AppDimensions.spaceMiddle),
+
+                      Text(
+                        'or continue with',
+                        style: AppTextStyle.base(16, color: colors.third),
+                      ),
+
+                      SizedBox(height: AppDimensions.spaceMiddle),
+
+                      // Кнопка Google
+                      GoogleSignInButton(
+                        isLoading: isLoading, // Показывает крутилку
+                        onPressed: () {
+                          // Вызываем метод кубита
+                          context.read<AuthCubit>().signInWithGoogle();
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
+
+// import 'package:flutter/material.dart';
+// import 'package:flutter/services.dart';
+// import 'package:flutter_svg/flutter_svg.dart';
+// import 'package:side_project/core/resources/app_svg.dart';
+// import 'package:side_project/core/resources/color_settings/color_extension.dart';
+// import 'package:side_project/core/resources/dimension/app_dimension.dart';
+// import 'package:sizer/sizer.dart';

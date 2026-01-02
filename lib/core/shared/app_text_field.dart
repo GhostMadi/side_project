@@ -1,87 +1,75 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:side_project/core/resources/app_colors.dart';
-import 'package:side_project/core/resources/app_text_style.dart';
+import 'package:side_project/core/resources/color_settings/color_extension.dart';
+import 'package:side_project/core/resources/dimension/app_dimension.dart';
+import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 
 class AppTextField extends StatelessWidget {
+  final String hintText;
+  final TextEditingController? controller;
+  final bool obscureText;
+  final Widget? suffixIcon;
+  final TextInputType? keyboardType;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onTap;
+
   const AppTextField({
     super.key,
-    this.label,
+    required this.hintText,
     this.controller,
-    this.keyboardType = TextInputType.text,
-    this.formatters = const [],
-    this.validator,
-    this.readOnly = false,
-    this.isPassword = false,
-    this.prefixWidget,
+    this.obscureText = false,
     this.suffixIcon,
-    this.isDense = true,
-    this.textAlign = TextAlign.start,
+    this.keyboardType,
+    this.validator,
     this.onChanged,
-    this.onComplete,
-    this.hintText,
     this.onTap,
-    this.enabled,
   });
-
-  final TextEditingController? controller;
-  final String? label;
-  final TextInputType keyboardType;
-  final List<TextInputFormatter> formatters;
-  final FormFieldValidator<String>? validator;
-  final bool readOnly;
-  final bool isPassword;
-  final Widget? prefixWidget;
-  final Widget? suffixIcon;
-  final bool isDense;
-  final bool? enabled;
-  final TextAlign textAlign;
-  final String? hintText;
-  final void Function(String value)? onChanged;
-  final void Function()? onComplete;
-  final void Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.appColors;
+    // Достаем палитру
+    final colors = context.appColors;
 
-    OutlineInputBorder border(Color color, {double w = 1}) =>
-        OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: color, width: w),
-        );
+    // Хелпер для бордеров
+    OutlineInputBorder border(Color color) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppDimensions.rCircle),
+        borderSide: BorderSide(color: color, width: 1.0),
+      );
+    }
 
     return TextFormField(
-      enabled: enabled,
       controller: controller,
+      obscureText: obscureText,
       keyboardType: keyboardType,
-      inputFormatters: formatters,
       validator: validator,
-      readOnly: readOnly,
-      obscureText: isPassword,
-      textAlign: textAlign,
       onChanged: onChanged,
-      onFieldSubmitted: onComplete == null ? null : (_) => onComplete!.call(),
       onTap: onTap,
-      cursorColor: c.secondary,
+
+      // Текст ввода
+      style: AppTextStyle.base(16, color: colors.secondary),
+      cursorColor: colors.brand,
+
       decoration: InputDecoration(
-        isDense: isDense,
-        labelText: label,
         hintText: hintText,
-        hintStyle: AppTextStyle.style(14, color: c.fourth),
-        labelStyle: AppTextStyle.style(14, color: c.fourth),
-        prefixIcon: prefixWidget,
-        suffixIcon: suffixIcon,
-
-        enabledBorder: border(c.fourth),
-        focusedBorder: border(c.brand),
-        disabledBorder: border(c.fourth),
-
-        errorBorder: border(c.error),
-        focusedErrorBorder: border(c.error),
+        // Текст подсказки (серый)
+        hintStyle: AppTextStyle.base(16, color: colors.third),
 
         filled: true,
-        fillColor: Colors.transparent,
+        fillColor: colors.primary, // Фон поля (Белый/Черный)
+
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: AppDimensions.paddingMiddle,
+          vertical: AppDimensions.paddingMiddle,
+        ),
+
+        suffixIcon: suffixIcon,
+
+        // Состояния границ (цвета берем из темы)
+        enabledBorder: border(colors.third), // Серый бордюр
+        focusedBorder: border(colors.brand), // Брендовый при фокусе
+        errorBorder: border(colors.error),
+        focusedErrorBorder: border(colors.error),
       ),
     );
   }

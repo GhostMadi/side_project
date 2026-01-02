@@ -1,13 +1,14 @@
-import 'package:supabase_flutter/supabase_flutter.dart' as sp;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 abstract class AuthRepository {
-  Future<void> signUp({required String email, required String password});
-  Future<void> signIn({required String email, required String password});
+  /// Вход через Google
+  Future<AuthResponse> signInWithGoogle();
+
+  /// Выход из системы
   Future<void> signOut();
 
-  // стрим изменения auth состояния от Supabase
-  Stream<sp.AuthState> get authStateChanges;
+  /// Проверка текущей сессии (опционально)
+  User? get currentUser;
 
-  // синхронный доступ к текущей сессии
-  sp.Session? get currentSession;
+  Future<bool> checkSession();
 }

@@ -1,6 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:side_project/core/resources/app_colors.dart';
+import 'package:side_project/core/resources/color_settings/color_extension.dart';
 import 'package:side_project/core/shared/app_size.dart';
 
 class AppBottomBar extends StatelessWidget {

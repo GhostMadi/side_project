@@ -1,4 +1,4 @@
-package com.example.side_project
+package kz.yetyApp
 
 import io.flutter.embedding.android.FlutterActivity
 
