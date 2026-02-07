@@ -11,6 +11,42 @@ PODS:
     - GoogleUtilities/Environment (~> 8.0)
     - GoogleUtilities/UserDefaults (~> 8.0)
     - PromisesObjC (~> 2.4)
+  - DKImagePickerController/Core (4.3.9):
+    - DKImagePickerController/ImageDataManager
+    - DKImagePickerController/Resource
+  - DKImagePickerController/ImageDataManager (4.3.9)
+  - DKImagePickerController/PhotoGallery (4.3.9):
+    - DKImagePickerController/Core
+    - DKPhotoGallery
+  - DKImagePickerController/Resource (4.3.9)
+  - DKPhotoGallery (0.0.19):
+    - DKPhotoGallery/Core (= 0.0.19)
+    - DKPhotoGallery/Model (= 0.0.19)
+    - DKPhotoGallery/Preview (= 0.0.19)
+    - DKPhotoGallery/Resource (= 0.0.19)
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Core (0.0.19):
+    - DKPhotoGallery/Model
+    - DKPhotoGallery/Preview
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Model (0.0.19):
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Preview (0.0.19):
+    - DKPhotoGallery/Model
+    - DKPhotoGallery/Resource
+    - SDWebImage
+    - SwiftyGif
+  - DKPhotoGallery/Resource (0.0.19):
+    - SDWebImage
+    - SwiftyGif
+  - emoji_picker_flutter (0.0.1):
+    - Flutter
+  - file_picker (0.0.1):
+    - DKImagePickerController/PhotoGallery
+    - Flutter
   - Flutter (1.0.0)
   - google_sign_in_ios (0.0.1):
     - Flutter
@@ -55,24 +91,33 @@ PODS:
     - Turf (= 4.0.0)
   - objective_c (0.0.1):
     - Flutter
+  - open_filex (0.0.2):
+    - Flutter
   - PromisesObjC (2.4.0)
+  - SDWebImage (5.21.5):
+    - SDWebImage/Core (= 5.21.5)
+  - SDWebImage/Core (5.21.5)
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
+  - SwiftyGif (5.4.5)
   - Turf (4.0.0)
   - url_launcher_ios (0.0.1):
     - Flutter
 
 DEPENDENCIES:
   - app_links (from `.symlinks/plugins/app_links/ios`)
+  - emoji_picker_flutter (from `.symlinks/plugins/emoji_picker_flutter/ios`)
+  - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - Flutter (from `Flutter`)
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - mapbox_maps_flutter (from `.symlinks/plugins/mapbox_maps_flutter/ios`)
   - objective_c (from `.symlinks/plugins/objective_c/ios`)
+  - open_filex (from `.symlinks/plugins/open_filex/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
@@ -81,6 +126,8 @@ SPEC REPOS:
   trunk:
     - AppAuth
     - AppCheckCore
+    - DKImagePickerController
+    - DKPhotoGallery
     - GoogleSignIn
     - GoogleUtilities
     - GTMAppAuth
@@ -89,11 +136,17 @@ SPEC REPOS:
     - MapboxCoreMaps
     - MapboxMaps
     - PromisesObjC
+    - SDWebImage
+    - SwiftyGif
     - Turf
 
 EXTERNAL SOURCES:
   app_links:
     :path: ".symlinks/plugins/app_links/ios"
+  emoji_picker_flutter:
+    :path: ".symlinks/plugins/emoji_picker_flutter/ios"
+  file_picker:
+    :path: ".symlinks/plugins/file_picker/ios"
   Flutter:
     :path: Flutter
   google_sign_in_ios:
@@ -104,6 +157,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/mapbox_maps_flutter/ios"
   objective_c:
     :path: ".symlinks/plugins/objective_c/ios"
+  open_filex:
+    :path: ".symlinks/plugins/open_filex/ios"
   shared_preferences_foundation:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   sqflite_darwin:
@@ -115,6 +170,10 @@ SPEC CHECKSUMS:
   app_links: 3dbc685f76b1693c66a6d9dd1e9ab6f73d97dc0a
   AppAuth: 1c1a8afa7e12f2ec3a294d9882dfa5ab7d3cb063
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
+  DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
+  DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
+  emoji_picker_flutter: ece213fc274bdddefb77d502d33080dc54e616cc
+  file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   google_sign_in_ios: 00dfa94252eb10278b64828c81bcb7158a81a53a
   GoogleSignIn: c7f09cfbc85a1abf69187be091997c317cc33b77
@@ -127,9 +186,12 @@ SPEC CHECKSUMS:
   MapboxCoreMaps: b7b7703cd8af3ae9088f42c6d23b591947a1eb1f
   MapboxMaps: 10b01217e5634aa7b6fc1fb10d036598d9240ba6
   objective_c: 89e720c30d716b036faf9c9684022048eee1eee2
+  open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
+  SDWebImage: e9c98383c7572d713c1a0d7dd2783b10599b9838
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
+  SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
   Turf: c9eb11a65d96af58cac523460fd40fec5061b081
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 

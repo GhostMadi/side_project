@@ -21,7 +21,7 @@ class AppButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 1. ЦВЕТА (Динамические, зависят от темы)
-    final colors = context.appColors;
+    // final colors = context.appColors;
 
     final isEnabled = onPressed != null && !isLoading;
 
@@ -37,9 +37,9 @@ class AppButton extends StatelessWidget {
               }
             : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: colors.brand, // Цвет бренда из темы
-          foregroundColor:
-              colors.secondary, // Цвет текста кнопки (черный/белый)
+          // backgroundColor: colors.brand, // Цвет бренда из темы
+          // foregroundColor:
+          //     colors.secondary, // Цвет текста кнопки (черный/белый)
 
           elevation: 0,
           shadowColor: Colors.transparent,
@@ -55,8 +55,8 @@ class AppButton extends StatelessWidget {
           ),
 
           // Цвета для выключенной кнопки
-          disabledBackgroundColor: colors.fourth,
-          disabledForegroundColor: colors.third,
+          // disabledBackgroundColor: colors.fourth,
+          // disabledForegroundColor: colors.third,
         ),
         child: isLoading
             ? SizedBox(
@@ -64,7 +64,7 @@ class AppButton extends StatelessWidget {
                 width: AppDimensions.iconMiddle,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(colors.secondary),
+                  // valueColor: AlwaysStoppedAnimation<Color>(colors.secondary),
                 ),
               )
             : Text(
@@ -73,7 +73,7 @@ class AppButton extends StatelessWidget {
                 style: AppTextStyle.base(
                   16,
                   weight: FontWeight.w300,
-                  color: isEnabled ? colors.secondary : colors.third,
+                  // color: isEnabled ? colors.secondary : colors.third,
                 ),
               ),
       ),

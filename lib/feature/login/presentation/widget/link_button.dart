@@ -17,7 +17,7 @@ class GoogleSignInButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
+    // final colors = AppColors;
     final double size = 12.w;
 
     return SizedBox(
@@ -31,11 +31,11 @@ class GoogleSignInButton extends StatelessWidget {
                 onPressed();
               },
         style: ElevatedButton.styleFrom(
-          backgroundColor: colors.primary,
-          foregroundColor: colors.third.withOpacity(0.3),
+          // backgroundColor: colors.primary,
+          // foregroundColor: colors.third.withOpacity(0.3),
           padding: EdgeInsets.zero,
           elevation: 2,
-          shadowColor: colors.secondary.withOpacity(0.1),
+          // shadowColor: colors.secondary.withOpacity(0.1),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -46,7 +46,7 @@ class GoogleSignInButton extends StatelessWidget {
                 width: 6.w,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(colors.brand),
+                  // valueColor: AlwaysStoppedAnimation<Color>(colors.brand),
                 ),
               )
             : SvgPicture.asset(AppSvg.google, height: 7.w, width: 7.w),

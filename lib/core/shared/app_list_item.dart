@@ -1,53 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:side_project/core/resources/color_settings/app_colors.dart';
-import 'package:side_project/core/resources/color_settings/color_extension.dart';
 
-class AppTile extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final IconData? leadingIcon;
-  final IconData? trailingIcon;
-  final VoidCallback? onTap;
+class AppListTile extends StatelessWidget {
+  final Widget title;
+  final VoidCallback onTap;
+  final Widget? leading;
+  final Widget? trailing;
+  final Color? backgroundColor;
+  final bool isDestructive; // Для кнопки "Выход" (красный текст)
 
-  const AppTile({
+  const AppListTile({
     super.key,
     required this.title,
-    this.subtitle,
-    this.leadingIcon,
-    this.trailingIcon,
-    this.onTap,
+    required this.onTap,
+    this.leading,
+    this.trailing,
+    this.backgroundColor,
+    this.isDestructive = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
+    return ListTile(
+      onTap: onTap,
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: colors.third, width: 1.2),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          listTileTheme: ListTileThemeData(
-            // iconColor: colors.textPrimary,
-            // textColor: colors.textPrimary,
-            tileColor: Colors.transparent, // Контейнер сам управляет цветом
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 4,
-            ),
-          ),
-        ),
-        child: ListTile(
-          onTap: onTap,
-          leading: leadingIcon != null ? Icon(leadingIcon) : null,
-          title: Text(title),
-          subtitle: subtitle != null ? Text(subtitle!) : null,
-          trailing: trailingIcon != null ? Icon(trailingIcon) : null,
-        ),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+
+      // 2. Иконка слева (если передали)
+      leading: leading,
+
+      // 3. Текст
+      title: title,
+
+      // 4. Иконка справа (Стрелочка по умолчанию, если не передали trailing)
+      trailing: trailing,
     );
   }
 }

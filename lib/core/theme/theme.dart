@@ -5,7 +5,7 @@ ThemeData lightTheme() {
   return ThemeData(
     scaffoldBackgroundColor: Colors.white,
     extensions: [
-      AppColorsExtension.light, // Цвета
+      // AppColorsExtension.light, // Цвета
       // AppTypographyExtension.light, // Шрифты
       // AppDimensionsExtension.main,
     ],
@@ -17,7 +17,7 @@ ThemeData blackTheme() {
     scaffoldBackgroundColor: Colors.black,
 
     extensions: [
-      AppColorsExtension.dark, // Цвета
+      // AppColorsExtension.dark, // Цвета
       // AppTypographyExtension.dark, // Шрифты
       // AppDimensionsExtension.main,
     ],

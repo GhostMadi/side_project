@@ -44,7 +44,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
+    // final colors = AppColors;
 
     // 1. ПРОВАЙДЕР: Внедряем Cubit в дерево виджетов
     return BlocProvider<AuthCubit>(
@@ -60,9 +60,9 @@ class _LoginPageState extends State<LoginPage> {
             error: (message) {
               log(message);
               // Ошибка -> показываем сообщение
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(message), backgroundColor: colors.error),
-              );
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   SnackBar(content: Text(message), backgroundColor: colors.error),
+              // );
             },
             orElse: () {},
           );
@@ -76,73 +76,79 @@ class _LoginPageState extends State<LoginPage> {
           );
 
           return Scaffold(
-            backgroundColor: colors.primary,
+            // backgroundColor: colors.primary,
+            // 1. SafeArea защищает от "челок" и нижних баров на телефонах
             body: SafeArea(
+              // 2. Center выравнивает контент по центру экрана, если экран шире, чем maxWidth
               child: Center(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingMiddle,
+                // 3. ConstrainedBox задает жесткое ограничение ширины
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    // 4. Оптимальная ширина для форм: 500-550px.
+                    // На телефонах (<500px) он займет всю ширину.
+                    // На планшетах (>500px) он остановится на 500px.
+                    maxWidth: 500,
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      SvgPicture.asset(AppSvg.logo),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppDimensions.paddingMiddle,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        SvgPicture.asset(AppSvg.logo),
 
-                      SizedBox(height: AppDimensions.spaceMiddle),
+                        SizedBox(height: AppDimensions.spaceMiddle),
 
-                      Text(
-                        'Please type your login and password \nto sign in',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyle.base(16, color: colors.third),
-                      ),
+                        Text(
+                          'Please type your login and password \nto sign in',
+                          textAlign: TextAlign.center,
+                          // style: AppTextStyle.base(16, color: colors.third),
+                        ),
 
-                      SizedBox(height: AppDimensions.spaceSenior),
+                        SizedBox(height: AppDimensions.spaceSenior),
 
-                      AppTextField(
-                        controller: _loginController,
-                        hintText: 'Login',
-                      ),
+                        AppTextField(
+                          controller: _loginController,
+                          hintText: 'Login',
+                        ),
 
-                      SizedBox(height: AppDimensions.spaceMiddle),
+                        SizedBox(height: AppDimensions.spaceMiddle),
 
-                      AppTextField(
-                        controller: _passwordController,
-                        hintText: 'Password',
-                        obscureText: true,
-                      ),
+                        AppTextField(
+                          controller: _passwordController,
+                          hintText: 'Password',
+                          obscureText: true,
+                        ),
 
-                      SizedBox(height: AppDimensions.spaceHuge),
+                        SizedBox(height: AppDimensions.spaceHuge),
 
-                      // Обычная кнопка входа
-                      AppButton(
-                        text: 'Sign in',
-                        // Блокируем, если идет загрузка Google
-                        isLoading: isLoading,
-                        onPressed: () {
-                          // Пока просто принт, так как метод входа по email мы еще не писали в кубите
-                          print("Email Login: ${_loginController.text}");
-                        },
-                      ),
+                        AppButton(
+                          text: 'Sign in',
+                          isLoading: isLoading,
+                          onPressed: () {
+                            print("Email Login: ${_loginController.text}");
+                          },
+                        ),
 
-                      SizedBox(height: AppDimensions.spaceMiddle),
+                        SizedBox(height: AppDimensions.spaceMiddle),
 
-                      Text(
-                        'or continue with',
-                        style: AppTextStyle.base(16, color: colors.third),
-                      ),
+                        Text(
+                          'or continue with',
+                          // style: AppTextStyle.base(16, color: colors.third),
+                        ),
 
-                      SizedBox(height: AppDimensions.spaceMiddle),
+                        SizedBox(height: AppDimensions.spaceMiddle),
 
-                      // Кнопка Google
-                      GoogleSignInButton(
-                        isLoading: isLoading, // Показывает крутилку
-                        onPressed: () {
-                          // Вызываем метод кубита
-                          context.read<AuthCubit>().signInWithGoogle();
-                        },
-                      ),
-                    ],
+                        GoogleSignInButton(
+                          isLoading: isLoading,
+                          onPressed: () {
+                            context.read<AuthCubit>().signInWithGoogle();
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

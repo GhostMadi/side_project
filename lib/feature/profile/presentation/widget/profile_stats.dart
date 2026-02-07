@@ -1,55 +1,37 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:side_project/core/resources/color_settings/color_extension.dart';
-import 'package:side_project/core/resources/dimension/app_dimension.dart';
-import 'package:side_project/feature/profile/presentation/cubit/profile_cubit.dart';
+// import 'package:flutter/material.dart';
+// import 'package:side_project/core/resources/color_settings/color_extension.dart';
+// import 'package:side_project/core/resources/dimension/app_dimension.dart';
+// import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 
-class ProfileStatsWidget extends StatelessWidget {
-  const ProfileStatsWidget({super.key});
+// class ProfileStatsWidget extends StatelessWidget {
+//   const ProfileStatsWidget({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    return BlocBuilder<ProfileCubit, ProfileState>(
-      builder: (context, state) {
-        // Магия Freezed:
-        return state.when(
-          // 1. Что показать при загрузке
-          loading: () => const Center(child: CircularProgressIndicator()),
+//   @override
+//   Widget build(BuildContext context) {
+//     final colors = AppColors;
 
-          // 2. Что показать при ошибке
-          error: (message) => Center(child: Text('Ошибка: $message')),
+//     return Container(
+//       margin: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMiddle),
+//       padding: EdgeInsets.symmetric(vertical: AppDimensions.paddingMiddle),
+//       decoration: BoxDecoration(
+//         borderRadius: BorderRadius.circular(100),
+//         border: Border.all(color: colors.fourth),
+//       ),
+//       child: Row(
+//         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+//         children: [
+//           _StatItem('Following', 10),
+//           _StatItem('Followers', 15),
+//           _StatItem('Eventers', 20),
+//         ],
+//       ),
+//     );
+//   }
 
-          // 3. Что показать, когда данные есть
-          loaded: (stats) => Container(
-            margin: EdgeInsets.symmetric(
-              horizontal: AppDimensions.paddingMiddle,
-            ),
-            padding: EdgeInsets.symmetric(
-              vertical: AppDimensions.paddingMiddle,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(color: colors.fourth),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _StatItem('Following', stats.followingCount),
-                _StatItem('Followers', stats.followersCount),
-                _StatItem('Events', stats.eventersCount),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _StatItem(String label, int count) => Column(
-    children: [
-      Text('$count', style: const TextStyle(fontWeight: FontWeight.bold)),
-      Text(label),
-    ],
-  );
-}
+//   Widget _StatItem(String label, int count) => Column(
+//     children: [
+//       Text('$count', style: AppTextStyle.base(15)),
+//       Text(label, style: AppTextStyle.base(15, weight: FontWeight.w400)),
+//     ],
+//   );
+// }

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:side_project/core/resources/color_settings/color_extension.dart';
 import 'package:side_project/core/resources/dimension/app_dimension.dart';
-import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 
 class AppTextField extends StatelessWidget {
   final String hintText;
@@ -28,7 +26,7 @@ class AppTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Достаем палитру
-    final colors = context.appColors;
+    // final colors = context.appColors;
 
     // Хелпер для бордеров
     OutlineInputBorder border(Color color) {
@@ -47,29 +45,25 @@ class AppTextField extends StatelessWidget {
       onTap: onTap,
 
       // Текст ввода
-      style: AppTextStyle.base(16, color: colors.secondary),
-      cursorColor: colors.brand,
-
+      // style: AppTextStyle.base(16, color: colors.secondary),
+      // cursorColor: colors.brand,
       decoration: InputDecoration(
         hintText: hintText,
+
         // Текст подсказки (серый)
-        hintStyle: AppTextStyle.base(16, color: colors.third),
-
+        // hintStyle: AppTextStyle.base(16, color: colors.third),
         filled: true,
-        fillColor: colors.primary, // Фон поля (Белый/Черный)
 
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingMiddle,
-          vertical: 16,
-        ),
+        // fillColor: colors.primary, // Фон поля (Белый/Черный)
+        contentPadding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMiddle, vertical: 16),
 
         suffixIcon: suffixIcon,
 
         // Состояния границ (цвета берем из темы)
-        enabledBorder: border(colors.third), // Серый бордюр
-        focusedBorder: border(colors.brand), // Брендовый при фокусе
-        errorBorder: border(colors.error),
-        focusedErrorBorder: border(colors.error),
+        // enabledBorder: border(colors.third), // Серый бордюр
+        // focusedBorder: border(colors.brand), // Брендовый при фокусе
+        // errorBorder: border(colors.error),
+        // focusedErrorBorder: border(colors.error),
       ),
     );
   }

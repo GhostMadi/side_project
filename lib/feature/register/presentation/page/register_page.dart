@@ -1,8 +1,9 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:side_project/core/dependencies/get_it.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/color_settings/color_extension.dart';
-import 'package:side_project/core/shared/app_app_bar.dart';
+import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
 import 'package:side_project/feature/login/presentation/cubit/auth_cubit.dart';
 import 'package:sizer/sizer.dart';
@@ -25,9 +26,9 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final appColors = context.appColors;
+    final appColors = AppColors;
     return Scaffold(
-      appBar: AppAppBar(showBackIfCanPop: true),
+      appBar: AppAppBar(automaticallyImplyLeading: true),
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.symmetric(),
@@ -52,7 +53,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   height: 30.w,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: appColors.secondary, width: 1),
+                    border: Border.all( width: 1),
                   ),
                   child: Icon(Icons.person_pin_rounded),
                 ),
