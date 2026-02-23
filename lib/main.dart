@@ -4,6 +4,8 @@ import 'package:side_project/core/feature/meta/cubit/splash_cubit.dart';
 import 'package:side_project/feature/app/app.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

@@ -1,14 +1,8 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:side_project/core/dependencies/get_it.dart';
-import 'package:side_project/core/resources/color_settings/color_extension.dart';
 import 'package:side_project/core/resources/dimension/app_dimension.dart';
-import 'package:side_project/core/resources/icons/app_icons.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
-import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
-import 'package:side_project/core/shared/app_list_item.dart';
-import 'package:side_project/feature/login/presentation/cubit/auth_cubit.dart';
 
 @RoutePage()
 class SettingsPage extends StatefulWidget {
@@ -32,10 +26,7 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           SizedBox(height: AppDimensions.spaceMiddle),
 
-          Text(
-            'General',
-            style: AppTextStyle.base(18, weight: FontWeight.w400),
-          ),
+          Text('General', style: AppTextStyle.base(18, fontWeight: FontWeight.w400)),
 
           // AppListTile(
           //   title: Text(

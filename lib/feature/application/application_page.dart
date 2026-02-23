@@ -23,7 +23,7 @@ class _ApplicationPageState extends State<ApplicationPage> {
   @override
   Widget build(BuildContext context) {
     return AutoTabsRouter(
-      routes: const [HomeRoute(), MessageRoute(), ProfileRoute()],
+      routes: const [HomeRoute(), PublicRoute(), ProfileRoute()],
       transitionBuilder: (context, child, animation) => FadeTransition(opacity: animation, child: child),
       builder: (context, child) {
         return Scaffold(

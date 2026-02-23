@@ -8,7 +8,7 @@ class MapMarker {
   final double lat;
   final double lng;
   final String emoji;
-  final Map<String, dynamic>? metadata; // Для любых доп. данных
+  final Map<String, dynamic>? metadata;
 
   MapMarker({required this.id, required this.lat, required this.lng, required this.emoji, this.metadata});
 }
@@ -37,44 +37,71 @@ class _AppMapWidgetState extends State<AppMapWidget> implements OnPointAnnotatio
   PointAnnotationManager? _annotationManager;
   MapboxMap? _mapboxMap;
 
-  // Используем кэш ID, так как это самый стабильный способ в текущем SDK
+  // Кэш для мгновенного поиска
   final Map<String, MapMarker> _mapboxIdToMarker = {};
 
-  @override
-  void onPointAnnotationClick(PointAnnotation annotation) {
-    HapticFeedback.lightImpact();
-
-    // Мгновенно находим наш маркер по внутреннему ID Mapbox
-    final marker = _mapboxIdToMarker[annotation.id];
+  // Прямой вызов обработки
+  void _handleMarkerSelection(String annotationId) {
+    final marker = _mapboxIdToMarker[annotationId];
     if (marker != null) {
+      HapticFeedback.selectionClick();
       widget.onMarkerTap?.call(marker);
     }
+  }
+
+  // Стандартный листенер Mapbox (оставляем для страховки)
+  @override
+  void onPointAnnotationClick(PointAnnotation annotation) {
+    _handleMarkerSelection(annotation.id);
   }
 
   void _onMapCreated(MapboxMap mapboxMap) {
     _mapboxMap = mapboxMap;
 
+    // Настройка жестов: убираем задержки распознавания
+    mapboxMap.gestures.updateSettings(
+      GesturesSettings(doubleTapToZoomInEnabled: false, quickZoomEnabled: false),
+    );
+
     mapboxMap.annotations.createPointAnnotationManager().then((manager) {
       if (!mounted) return;
       _annotationManager = manager;
-
-      // Регистрируем слушатель
       manager.addOnPointAnnotationClickListener(this);
       _syncMarkers();
     });
+
+    // ИСПРАВЛЕНО: Назначаем функцию напрямую в листенер
+    mapboxMap.onMapTapListener = (coordinate) async {
+      final map = _mapboxMap;
+      if (map == null || _annotationManager == null) return;
+
+      // Получаем экранные координаты точки нажатия
+      final screenCoordinate = await map.pixelForCoordinate(coordinate.point);
+
+      // Опрашиваем движок на наличие объектов в слое аннотаций
+      final List<QueriedRenderedFeature?> features = await map.queryRenderedFeatures(
+        RenderedQueryGeometry.fromScreenCoordinate(screenCoordinate),
+        RenderedQueryOptions(layerIds: [_annotationManager!.id], filter: null),
+      );
+
+      if (features.isNotEmpty) {
+        // Получаем ID фичи (маркера)
+        final featureId = features.first?.queriedFeature.feature["id"]?.toString();
+        if (featureId != null) {
+          _handleMarkerSelection(featureId);
+        }
+      }
+    };
   }
 
+  // ИСПРАВЛЕННЫЙ МЕТОД СИНХРОНИЗАЦИИ
   Future<void> _syncMarkers() async {
     final manager = _annotationManager;
     if (manager == null || !mounted) return;
 
-    await manager.deleteAll();
-    _mapboxIdToMarker.clear();
-
     final List<PointAnnotationOptions> options = await Future.wait(
       widget.markers.map((m) async {
         final Uint8List? imageBytes = await MarkerGeneratorService.createEmojiMarker(m.emoji);
-
         return PointAnnotationOptions(
           geometry: Point(coordinates: Position(m.lng, m.lat)),
           image: imageBytes,
@@ -84,15 +111,17 @@ class _AppMapWidgetState extends State<AppMapWidget> implements OnPointAnnotatio
       }),
     );
 
-    if (mounted) {
-      // Создаем аннотации и сохраняем их ID для связи
-      final annotations = await manager.createMulti(options);
+    if (!mounted) return;
 
-      for (int i = 0; i < annotations.length; i++) {
-        final ann = annotations[i];
-        if (ann != null) {
-          _mapboxIdToMarker[ann.id] = widget.markers[i];
-        }
+    await manager.deleteAll();
+    _mapboxIdToMarker.clear();
+
+    final annotations = await manager.createMulti(options);
+
+    for (int i = 0; i < annotations.length; i++) {
+      final ann = annotations[i];
+      if (ann != null) {
+        _mapboxIdToMarker[ann.id] = widget.markers[i];
       }
     }
   }
@@ -107,7 +136,7 @@ class _AppMapWidgetState extends State<AppMapWidget> implements OnPointAnnotatio
 
   @override
   void dispose() {
-    // Исправленное название метода удаления слушателя
+    _mapboxIdToMarker.clear();
     _annotationManager?.deleteAll();
     super.dispose();
   }
@@ -123,7 +152,10 @@ class _AppMapWidgetState extends State<AppMapWidget> implements OnPointAnnotatio
         center: Point(coordinates: Position(widget.initialLng, widget.initialLat)),
         zoom: widget.initialZoom,
       ),
-      mapOptions: MapOptions(pixelRatio: MediaQuery.of(context).devicePixelRatio),
+      mapOptions: MapOptions(
+        pixelRatio: MediaQuery.of(context).devicePixelRatio,
+        crossSourceCollisions: false,
+      ),
     );
   }
 }

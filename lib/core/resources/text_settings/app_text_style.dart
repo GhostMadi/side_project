@@ -6,12 +6,14 @@ class AppTextStyle {
     double size, {
     double? height,
     Color? color,
-    FontWeight? weight,
+    FontWeight? fontWeight,
+    double? letterSpacing,
   }) => TextStyle(
     fontSize: size.sp,
     color: color,
     fontFamily: 'Manrope',
-    fontWeight: weight ?? FontWeight.w300,
+    fontWeight: fontWeight ?? FontWeight.w300,
     height: height,
+    letterSpacing: letterSpacing
   );
 }

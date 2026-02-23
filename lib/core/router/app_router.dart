@@ -22,9 +22,11 @@ class AppRouter extends RootStackRouter {
     // Если хотите для них другую (например, снизу вверх),
     // используйте CustomRoute(page: ..., transitionsBuilder: ...)
     AutoRoute(page: LoginRoute.page),
+    AutoRoute(page: PstRoute.page),
     AutoRoute(page: ExampleRoute.page),
     AutoRoute(page: AdminEditorRoute.page),
     AutoRoute(page: RegisterRoute.page),
+    AutoRoute(page: TicketViewRoute.page),
 
     // Application
     AutoRoute(
@@ -35,9 +37,9 @@ class AppRouter extends RootStackRouter {
         // ВАЖНО: Если эти страницы переключаются в BottomNavigationBar,
         // лучше отключить анимацию, заменив AutoRoute на CustomRoute
         // с transitionsBuilder: TransitionsBuilders.noTransition
-        AutoRoute(page: MessageRoute.page),
+        AutoRoute(page: PublicRoute.page),
         AutoRoute(page: ProfileRoute.page),
-        AutoRoute(page: HomeRoute.page, initial: true),
+        AutoRoute(page: HomeRoute.page),
       ],
     ),
 

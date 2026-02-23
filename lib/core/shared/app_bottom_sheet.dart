@@ -1,13 +1,15 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
+import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 
 class AppBottomSheet {
   static Future<void> show({
     required BuildContext context,
-    required String title,
-    required String emoji,
+    String? title,
     required Widget content,
     List<Widget>? actions,
   }) {
@@ -21,80 +23,101 @@ class AppBottomSheet {
       elevation: 0,
       builder: (context) => Stack(
         children: [
-          // 1. Прозрачный слой для закрытия при тапе МИМО контейнера
+          // Слой для закрытия тапом по фону
           Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => Navigator.pop(context),
-              child: const SizedBox.expand(),
-            ),
+            child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => Navigator.pop(context)),
           ),
 
-          // 2. Обертка с эффектом Желе и самим контентом
+          // Желейная обертка с твоей логикой Transform
           _JellySheetWrapper(
             child: Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                 child: GestureDetector(
-                  // Пустой onTap, чтобы тапы ВНУТРИ контейнера не закрывали его
-                  onTap: () {},
-                  child: Container(
-                    width: sheetWidth,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 25,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 12),
-                        Container(
-                          width: 36,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
+                  onTap: () {}, // Защита от закрытия при тапе на само окно
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        width: sheetWidth,
+                        decoration: BoxDecoration(
+                          color: AppColors.bottomBarColor.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(
+                            color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.2),
+                            width: 1.5,
                           ),
-                        ),
-                        const SizedBox(height: 24),
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(color: Colors.grey[50], shape: BoxShape.circle),
-                          child: Text(emoji, style: const TextStyle(fontSize: 48)),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 12),
-                        Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: content),
-                        const SizedBox(height: 32),
-                        if (actions != null)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                            child: Row(
-                              children: actions
-                                  .expand(
-                                    (a) => [
-                                      Expanded(child: a),
-                                      if (a != actions.last) const SizedBox(width: 12),
-                                    ],
-                                  )
-                                  .toList(),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 30,
+                              offset: const Offset(0, 10),
                             ),
-                          ),
-                      ],
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(height: 12),
+                            // Handle
+                            Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.bottomBarInactiveIcon.withValues(alpha: 0.4),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            if (title != null) ...[
+                              // Заголовок
+                              Text(
+                                title.toUpperCase(),
+                                textAlign: TextAlign.center,
+                                style: AppTextStyle.base(
+                                  20,
+                                  color: AppColors.bottomBarActiveIcon,
+
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // Контент
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: DefaultTextStyle(
+                                style: TextStyle(
+                                  color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.7),
+                                  fontSize: 15,
+                                  height: 1.5,
+                                ),
+                                child: content,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            // Кнопки
+                            if (actions != null)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                                child: Row(
+                                  children: actions
+                                      .expand(
+                                        (a) => [
+                                          Expanded(child: a),
+                                          if (a != actions.last) const SizedBox(width: 12),
+                                        ],
+                                      )
+                                      .toList(),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -124,6 +147,7 @@ class _JellySheetWrapperState extends State<_JellySheetWrapper> with SingleTicke
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
 
+    // Та же кривая, что и в BottomBar для единства стиля
     _jellyAnim = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -144,7 +168,7 @@ class _JellySheetWrapperState extends State<_JellySheetWrapper> with SingleTicke
     return AnimatedBuilder(
       animation: _jellyAnim,
       builder: (context, child) {
-        // Та же логика Transform, что и в твоем BottomBar
+        // Твоя проверенная математика желе
         final double scale = 0.9 + (_jellyAnim.value * 0.1);
         final double vScale = 1.0 + (1.0 - scale) * 0.8;
 

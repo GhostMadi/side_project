@@ -3,14 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 
-class AppButton extends StatefulWidget {
+class AppOutlinedButton extends StatefulWidget {
   final String text;
   final Widget? child;
   final VoidCallback? onPressed;
   final bool isLoading;
   final bool isExpanded;
 
-  const AppButton({
+  const AppOutlinedButton({
     super.key,
     required this.text,
     required this.onPressed,
@@ -20,36 +20,28 @@ class AppButton extends StatefulWidget {
   });
 
   @override
-  State<AppButton> createState() => _AppButtonState();
+  State<AppOutlinedButton> createState() => _AppOutlinedButtonState();
 }
 
-class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMixin {
+class _AppOutlinedButtonState extends State<AppOutlinedButton> with SingleTickerProviderStateMixin {
   late AnimationController _jellyController;
   late Animation<double> _jellyAnimation;
 
   @override
   void initState() {
     super.initState();
-    // Длительность 600мс как в боттом баре для сочного эффекта
     _jellyController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-
     _jellyAnimation = Tween<double>(begin: 1.0, end: 1.0).animate(_jellyController);
   }
 
   void _triggerJelly() {
-    HapticFeedback.heavyImpact(); // Тяжелый отклик для эффекта желе
+    HapticFeedback.heavyImpact();
 
     setState(() {
-      _jellyAnimation =
-          Tween<double>(
-            begin: 0.85, // Сжатие до 85%
-            end: 1.0,
-          ).animate(
-            CurvedAnimation(
-              parent: _jellyController,
-              curve: Curves.elasticOut, // Пружина
-            ),
-          );
+      _jellyAnimation = Tween<double>(
+        begin: 0.85,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: _jellyController, curve: Curves.elasticOut));
     });
 
     _jellyController.forward(from: 0.0);
@@ -69,11 +61,10 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
       animation: _jellyAnimation,
       builder: (context, child) {
         final double scale = _jellyAnimation.value;
-        // Логика из твоего боттом бара: компенсируем ширину высотой
         final double vScale = 1.0 + (1.0 - scale) * 0.5;
 
         return Transform(
-          alignment: Alignment.center, // Центрируем шлепок
+          alignment: Alignment.center,
           transform: Matrix4.diagonal3Values(scale, vScale, 1.0)..setEntry(3, 2, 0.001),
           child: child,
         );
@@ -91,17 +82,12 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
             height: 56,
             width: widget.isExpanded ? double.infinity : null,
             decoration: BoxDecoration(
-              color: isEnabled ? AppColors.btnBackground : AppColors.btnDisabled,
+              color: Colors.transparent, // Фон прозрачный
               borderRadius: BorderRadius.circular(100),
-              boxShadow: isEnabled
-                  ? [
-                      BoxShadow(
-                        color: AppColors.btnBackground.withOpacity(0.3),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                  : [],
+              border: Border.all(
+                color: isEnabled ? AppColors.btnBackground : AppColors.btnDisabledText,
+                width: 1.5, // Тонкая рамка
+              ),
             ),
             child: Center(
               child: widget.isLoading
@@ -110,7 +96,7 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
                       width: 24,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.btnBackground),
                       ),
                     )
                   : widget.child ??
@@ -119,7 +105,7 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
                           style: AppTextStyle.base(
                             16,
                             fontWeight: FontWeight.w600,
-                            color: isEnabled ? Colors.white : AppColors.btnDisabledText,
+                            color: isEnabled ? AppColors.btnBackground : AppColors.btnDisabledText,
                           ),
                         ),
             ),

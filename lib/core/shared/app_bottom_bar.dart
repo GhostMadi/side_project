@@ -2,6 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
+import 'package:side_project/core/resources/icons/app_icons.dart';
 import 'package:side_project/core/shared/app_size.dart';
 
 class AppBottomBar extends StatefulWidget {
@@ -122,13 +123,13 @@ class _AppBottomBarState extends State<AppBottomBar> with SingleTickerProviderSt
   }
 
   IconData _getIconForIndex(int index) {
-    if (index == 0) return Icons.map_outlined;
+    if (index == 0) return AppIcons.map.icon;
     if (index == 1) return Icons.radar;
-    return Icons.fingerprint;
+    return AppIcons.user.icon;
   }
 
   String _getLabelForIndex(int index) {
-    final labels = ["MAP", "RADAR", "BIO ID"];
+    final labels = ["MAP", "RADAR", "PROFILE"];
     return labels[index];
   }
 }

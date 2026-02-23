@@ -6,8 +6,7 @@ import 'package:flutter/material.dart';
 enum AppIcons {
   // Исправил опечатку: Icons.profil -> Icons.person
   map(iconAndroid: Icons.map_rounded, iconIos: CupertinoIcons.map_fill),
-
-
+  ticket(iconAndroid: Icons.confirmation_number_outlined, iconIos: CupertinoIcons.ticket),
 
   user(iconAndroid: Icons.person, iconIos: CupertinoIcons.person_fill),
   menu(iconAndroid: Icons.menu, iconIos: CupertinoIcons.bars),
@@ -19,20 +18,11 @@ enum AppIcons {
   photo(iconAndroid: Icons.photo, iconIos: CupertinoIcons.photo),
   folder(iconAndroid: Icons.folder, iconIos: CupertinoIcons.folder),
   add(iconAndroid: Icons.add, iconIos: CupertinoIcons.add),
-  delete(
-    iconAndroid: Icons.delete_outline_outlined,
-    iconIos: CupertinoIcons.delete,
-  ),
+  delete(iconAndroid: Icons.delete_outline_outlined, iconIos: CupertinoIcons.delete),
   search(iconAndroid: Icons.search, iconIos: CupertinoIcons.search),
-  arrowDown(
-    iconAndroid: Icons.keyboard_arrow_down_rounded,
-    iconIos: Icons.keyboard_arrow_down_rounded,
-  ),
+  arrowDown(iconAndroid: Icons.keyboard_arrow_down_rounded, iconIos: Icons.keyboard_arrow_down_rounded),
   checkBox(iconAndroid: Icons.check_box, iconIos: CupertinoIcons.check_mark),
-  checkBoxBlank(
-    iconAndroid: Icons.check_box_outline_blank,
-    iconIos: CupertinoIcons.square,
-  );
+  checkBoxBlank(iconAndroid: Icons.check_box_outline_blank, iconIos: CupertinoIcons.square);
 
   final IconData iconAndroid;
   final IconData iconIos;

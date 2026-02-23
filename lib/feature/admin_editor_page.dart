@@ -41,25 +41,7 @@ class _AdminEditorPageState extends State<AdminEditorPage> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // 1. СХЕМА НА ВЕСЬ ЭКРАН
-          Positioned.fill(
-            child: UniversalHallWidget(
-              hallData: editingHall,
-              selectedSeats: const [],
-              onSeatTap: (id) {
-                final zoneId = id.split('_').first;
-                setState(() {
-                  selectedZoneIndex = editingHall['zones'].indexWhere((z) => z['id'] == zoneId);
-                });
-              },
-            ),
-          ),
-
-          // 2. ВЕРХНИЕ ИНСТРУМЕНТЫ (Компактные)
-          _buildMinimalTopBar(),
-
-          // 3. ПЛАВАЮЩИЙ ИНСПЕКТОР (Умный дизайн)
-          if (selectedZoneIndex != null) _buildFloatingInspector(),
+        
         ],
       ),
     );
