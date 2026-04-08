@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppListTile extends StatelessWidget {
   final Widget title;
+  final Widget? subtitle;
   final VoidCallback onTap;
   final Widget? leading;
   final Widget? trailing;
@@ -11,6 +12,7 @@ class AppListTile extends StatelessWidget {
   const AppListTile({
     super.key,
     required this.title,
+    this.subtitle,
     required this.onTap,
     this.leading,
     this.trailing,
@@ -31,6 +33,7 @@ class AppListTile extends StatelessWidget {
 
       // 3. Текст
       title: title,
+      subtitle: subtitle,
 
       // 4. Иконка справа (Стрелочка по умолчанию, если не передали trailing)
       trailing: trailing,

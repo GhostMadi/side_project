@@ -1,72 +1,53 @@
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/material.dart'; // Нужен для Curves и виджетов анимации
+import 'package:flutter/material.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
-import 'package:side_project/core/router/guard.dart';
 
 @AutoRouterConfig()
 class AppRouter extends RootStackRouter {
-  final AuthGuard _authGuard = AuthGuard();
-
-  // 1. ПЕРЕОПРЕДЕЛЯЕМ ГЛОБАЛЬНУЮ АНИМАЦИЮ
   @override
   RouteType get defaultRouteType => RouteType.custom(
-    // Используем нашу кастомную функцию (см. ниже)
     transitionsBuilder: _slideAndFadeTransition,
-    duration: Duration(milliseconds: 300),
-    reverseDuration: Duration(milliseconds: 300),
+    duration: const Duration(milliseconds: 300),
+    reverseDuration: const Duration(milliseconds: 300),
   );
 
   @override
   List<AutoRoute> get routes => [
-    // Login и Register тоже будут с этой анимацией.
-    // Если хотите для них другую (например, снизу вверх),
-    // используйте CustomRoute(page: ..., transitionsBuilder: ...)
+    AutoRoute(page: SessionGateRoute.page, initial: true),
     AutoRoute(page: LoginRoute.page),
-    AutoRoute(page: PstRoute.page),
-    AutoRoute(page: ExampleRoute.page),
-    AutoRoute(page: AdminEditorRoute.page),
-    AutoRoute(page: RegisterRoute.page),
-    AutoRoute(page: TicketViewRoute.page),
-
-    // Application
     AutoRoute(
       page: ApplicationRoute.page,
-      initial: true,
-      // guards: [_authGuard],
       children: [
-        // ВАЖНО: Если эти страницы переключаются в BottomNavigationBar,
-        // лучше отключить анимацию, заменив AutoRoute на CustomRoute
-        // с transitionsBuilder: TransitionsBuilders.noTransition
-        AutoRoute(page: PublicRoute.page),
+        AutoRoute(page: MapRoute.page, initial: true),
         AutoRoute(page: ProfileRoute.page),
-        AutoRoute(page: HomeRoute.page),
       ],
     ),
-
-    // Settings
+    AutoRoute(page: ClusterCreateRoute.page),
+    AutoRoute(page: PostCreateRoute.page),
+    AutoRoute(page: PostDetailRoute.page),
+    AutoRoute(page: EditProfileRoute.page),
+    AutoRoute(page: ProfileImageEditRoute.page),
+    AutoRoute(page: EditProfileFieldRoute.page),
+    AutoRoute(page: EditProfileSelectFieldRoute.page),
     AutoRoute(page: SettingsRoute.page),
-    AutoRoute(page: BusinessRequestsRoute.page),
+    AutoRoute(page: ArchivedRoute.page),
+    AutoRoute(page: MyAppointmentsRoute.page),
+    AutoRoute(page: OrganizerProfileRoute.page),
   ];
 }
 
-// 2. СОЗДАЕМ КРАСИВУЮ ФУНКЦИЮ АНИМАЦИИ (Вне класса или как static метод)
 Widget _slideAndFadeTransition(
   BuildContext context,
   Animation<double> animation,
   Animation<double> secondaryAnimation,
   Widget child,
 ) {
-  // Настройка кривой (Curve) делает движение "живым"
   const curve = Curves.easeInOut;
-
-  // Анимация движения (справа налево)
-  var slideTween = Tween<Offset>(
-    begin: const Offset(0.1, 0.0), // 0.1 означает небольшой сдвиг, 1.0 - полный выезд
+  final slideTween = Tween<Offset>(
+    begin: const Offset(0.1, 0.0),
     end: Offset.zero,
   ).chain(CurveTween(curve: curve));
-
-  // Анимация прозрачности
-  var fadeTween = Tween<double>(begin: 0.0, end: 1.0).chain(CurveTween(curve: curve));
+  final fadeTween = Tween<double>(begin: 0.0, end: 1.0).chain(CurveTween(curve: curve));
 
   return SlideTransition(
     position: animation.drive(slideTween),

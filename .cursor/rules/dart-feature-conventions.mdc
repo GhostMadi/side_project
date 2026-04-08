@@ -1,0 +1,42 @@
+---
+description: Models (Freezed), single-file repository+impl, single-file cubit, get_it/injectable
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# Dart: модели, репозитории, cubit, регистрация DI
+
+## 1) Модели
+
+- Новые DTO/модели состояния делать через **freezed** + `freezed_annotation`.
+- Для JSON с бэка: **`json_serializable`** / `JsonKey` в том же классе, `part '*.freezed.dart'`, `part '*.g.dart'`.
+- После правок: `dart run build_runner build --delete-conflicting-outputs`.
+- Не дублировать «сырые» и «UI» модели без причины; при необходимости отдельный маппинг в data/repository слое.
+
+## 2) Репозиторий
+
+- **Абстрактный контракт и `*Impl` — в одном файле** (например `auth_repository.dart`: `abstract class AuthRepository` + `class AuthRepositoryImpl implements AuthRepository`).
+- Не плодить отдельные файлы `*_repository.dart` и `*_repository_impl.dart`, если это не нужно по размеру/границам команды.
+
+## 3) Cubit
+
+- **Состояние и cubit — в одном файле** (например `auth_cubit.dart`: sealed/freezed state + `class AuthCubit extends Cubit<AuthState>`).
+- Исключение: файл стал нечитаемым — тогда осознанно делить (редко).
+- Методы cubit по намерению: `loadX`, `submitX`, не «onTap» из UI.
+
+## 4) Регистрация (get_it + injectable)
+
+- Регистрация только через **`injectable`** + кодоген `get_it.config.dart`; в виджетах не создавать репозитории/сервисы вручную.
+- **По умолчанию — фабрика:** `@injectable` (или `@Injectable(as: Interface)`), чтобы каждый раз при необходимости новый экземпляр, если нет причин держать один.
+- **`@lazySingleton` / `@singleton`** — только если по логике нужен один экземпляр на приложение (кэш, клиент HTTP, хранилище сессии и т.п.).
+- После изменения аннотаций: `dart run build_runner build --delete-conflicting-outputs`.
+
+## Структура фич
+
+- **`lib/feature_draft/`** — черновики: UI-прототипы, демо-данные, эксперименты (профиль, настройки, заявки и т.д.).
+- **`lib/feature/<имя>/`** — стабильные фичи (например `login`): слои, DI, роуты. При готовности переносить код из `feature_draft`.
+
+## Прочее
+
+- Навигация: `auto_route`, классы из `app_router.gr.dart`.
+- Направление зависимостей: `presentation → domain → data`, без обратных импортов.

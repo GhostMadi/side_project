@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Google Sign-In: подставляется как serverClientId, если в Dart не передан GOOGLE_SERVER_CLIENT_ID -->
+    <string name="default_web_client_id">467582409286-272ubtd35527qq0r3dj6969ogtui5shm.apps.googleusercontent.com</string>
+</resources>

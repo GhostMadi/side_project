@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -12,14 +17,12 @@
           android:host="login-callback" />
       </intent-filter>
     <application
-
-    
-        android:label="side_project"
-        android:name="${applicationName}"
+        android:label="clover_app"
+        android:name=".MainApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             
-            android:name=".MainActivity"
+            android:name="app.clover.mobile.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

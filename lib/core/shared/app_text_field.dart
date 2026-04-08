@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:side_project/core/resources/dimension/app_dimension.dart';
+import 'package:flutter/services.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
+import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 
 class AppTextField extends StatelessWidget {
   final String hintText;
@@ -10,6 +12,13 @@ class AppTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final ValueChanged<String>? onChanged;
   final VoidCallback? onTap;
+  final TextCapitalization textCapitalization;
+  final bool autocorrect;
+  final List<TextInputFormatter>? inputFormatters;
+  final int? maxLines;
+  final int? minLines;
+  final bool autofocus;
+  final bool readOnly;
 
   const AppTextField({
     super.key,
@@ -21,49 +30,62 @@ class AppTextField extends StatelessWidget {
     this.validator,
     this.onChanged,
     this.onTap,
+    this.textCapitalization = TextCapitalization.none,
+    this.autocorrect = true,
+    this.inputFormatters,
+    this.maxLines,
+    this.minLines,
+    this.autofocus = false,
+    this.readOnly = false,
   });
+
+  static const double _radius = 12;
 
   @override
   Widget build(BuildContext context) {
-    // Достаем палитру
-    // final colors = context.appColors;
+    final borderColor = AppColors.inputBorder;
+    final fill = AppColors.inputBackground;
+    final effectiveMaxLines = obscureText ? 1 : maxLines;
+    final effectiveMinLines = obscureText ? null : minLines;
 
-    // Хелпер для бордеров
-    OutlineInputBorder border(Color color) {
+    OutlineInputBorder outline(Color color, {double width = 1}) {
       return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppDimensions.rCircle),
-        borderSide: BorderSide(color: color, width: 1.0),
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: BorderSide(color: color, width: width),
       );
     }
 
     return TextFormField(
+      autofocus: autofocus,
+      readOnly: readOnly,
       controller: controller,
       obscureText: obscureText,
+      maxLines: effectiveMaxLines,
+      minLines: effectiveMinLines,
       keyboardType: keyboardType,
       validator: validator,
       onChanged: onChanged,
       onTap: onTap,
-
-      // Текст ввода
-      // style: AppTextStyle.base(16, color: colors.secondary),
-      // cursorColor: colors.brand,
+      textCapitalization: textCapitalization,
+      autocorrect: obscureText ? false : autocorrect,
+      enableSuggestions: !obscureText,
+      inputFormatters: inputFormatters,
+      style: AppTextStyle.base(16, color: AppColors.textColor, height: 1.25),
+      cursorColor: AppColors.btnBackground,
       decoration: InputDecoration(
+        isDense: true,
         hintText: hintText,
-
-        // Текст подсказки (серый)
-        // hintStyle: AppTextStyle.base(16, color: colors.third),
+        hintStyle: AppTextStyle.base(16, color: AppColors.subTextColor.withValues(alpha: 0.65)),
         filled: true,
-
-        // fillColor: colors.primary, // Фон поля (Белый/Черный)
-        contentPadding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMiddle, vertical: 16),
-
+        fillColor: fill,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         suffixIcon: suffixIcon,
-
-        // Состояния границ (цвета берем из темы)
-        // enabledBorder: border(colors.third), // Серый бордюр
-        // focusedBorder: border(colors.brand), // Брендовый при фокусе
-        // errorBorder: border(colors.error),
-        // focusedErrorBorder: border(colors.error),
+        suffixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 48),
+        enabledBorder: outline(borderColor),
+        focusedBorder: outline(AppColors.btnBackground, width: 1.5),
+        errorBorder: outline(AppColors.error),
+        focusedErrorBorder: outline(AppColors.error, width: 1.5),
+        border: outline(borderColor),
       ),
     );
   }

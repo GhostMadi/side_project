@@ -1,6 +1,6 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:side_project/core/resources/color_settings/color_extension.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/icons/app_icons.dart';
 
 class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -9,6 +9,9 @@ class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool automaticallyImplyLeading;
   final List<Widget>? actions;
   final Color? backgroundColor;
+  /// Цвет иконок и текста по умолчанию в AppBar (кнопка «Назад» и т.п.).
+  final Color? foregroundColor;
+  final PreferredSizeWidget? bottom;
 
   const AppAppBar({
     super.key,
@@ -17,16 +20,20 @@ class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.automaticallyImplyLeading = true,
     this.actions,
     this.backgroundColor,
+    this.foregroundColor,
+    this.bottom,
   });
 
   @override
   Widget build(BuildContext context) {
     // final colors = context.appColors;
 
+    final bg = backgroundColor ?? AppColors.pageBackground;
     return AppBar(
-      // backgroundColor: backgroundColor ?? colors.primary,
-      // foregroundColor: colors.secondary,
-      // surfaceTintColor: colors.primary,
+      backgroundColor: bg,
+      foregroundColor: foregroundColor ?? AppColors.textColor,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
       elevation: 0,
       centerTitle: true,
 
@@ -52,9 +59,13 @@ class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
               : null),
 
       actions: actions,
+      bottom: bottom,
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize {
+    final bottomHeight = bottom?.preferredSize.height ?? 0;
+    return Size.fromHeight(kToolbarHeight + bottomHeight);
+  }
 }

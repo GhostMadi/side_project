@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
+import 'package:side_project/core/shared/jelly_press_controller.dart';
 
 class AppButton extends StatefulWidget {
   final String text;
@@ -24,57 +24,32 @@ class AppButton extends StatefulWidget {
 }
 
 class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMixin {
-  late AnimationController _jellyController;
-  late Animation<double> _jellyAnimation;
+  late final JellyPressController _jelly;
 
   @override
   void initState() {
     super.initState();
-    // Длительность 600мс как в боттом баре для сочного эффекта
-    _jellyController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-
-    _jellyAnimation = Tween<double>(begin: 1.0, end: 1.0).animate(_jellyController);
-  }
-
-  void _triggerJelly() {
-    HapticFeedback.heavyImpact(); // Тяжелый отклик для эффекта желе
-
-    setState(() {
-      _jellyAnimation =
-          Tween<double>(
-            begin: 0.85, // Сжатие до 85%
-            end: 1.0,
-          ).animate(
-            CurvedAnimation(
-              parent: _jellyController,
-              curve: Curves.elasticOut, // Пружина
-            ),
-          );
-    });
-
-    _jellyController.forward(from: 0.0);
+    _jelly = JellyPressController(vsync: this, onAnimationSwap: () => setState(() {}));
   }
 
   @override
   void dispose() {
-    _jellyController.dispose();
+    _jelly.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isEnabled = widget.onPressed != null && !widget.isLoading;
+    final isEnabled = widget.onPressed != null && !widget.isLoading;
 
     return AnimatedBuilder(
-      animation: _jellyAnimation,
+      animation: _jelly.scaleAnimation,
       builder: (context, child) {
-        final double scale = _jellyAnimation.value;
-        // Логика из твоего боттом бара: компенсируем ширину высотой
-        final double vScale = 1.0 + (1.0 - scale) * 0.5;
-
+        final s = _jelly.scaleAnimation.value;
+        final vScale = 1.0 + (1.0 - s) * 0.5;
         return Transform(
-          alignment: Alignment.center, // Центрируем шлепок
-          transform: Matrix4.diagonal3Values(scale, vScale, 1.0)..setEntry(3, 2, 0.001),
+          alignment: Alignment.center,
+          transform: Matrix4.diagonal3Values(s, vScale, 1.0)..setEntry(3, 2, 0.001),
           child: child,
         );
       },
@@ -83,7 +58,7 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
         child: GestureDetector(
           onTap: isEnabled
               ? () {
-                  _triggerJelly();
+                  _jelly.trigger();
                   widget.onPressed?.call();
                 }
               : null,
@@ -96,12 +71,12 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
               boxShadow: isEnabled
                   ? [
                       BoxShadow(
-                        color: AppColors.btnBackground.withOpacity(0.3),
+                        color: AppColors.btnBackground.withValues(alpha: 0.3),
                         blurRadius: 15,
                         offset: const Offset(0, 8),
                       ),
                     ]
-                  : [],
+                  : const [],
             ),
             child: Center(
               child: widget.isLoading
@@ -113,15 +88,16 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : widget.child ??
-                        Text(
-                          widget.text,
-                          style: AppTextStyle.base(
-                            16,
-                            fontWeight: FontWeight.w600,
-                            color: isEnabled ? Colors.white : AppColors.btnDisabledText,
-                          ),
-                        ),
+                  : widget.child != null
+                  ? Padding(padding: EdgeInsets.symmetric(horizontal: 5), child: widget.child)
+                  : Text(
+                      widget.text,
+                      style: AppTextStyle.base(
+                        16,
+                        fontWeight: FontWeight.w600,
+                        color: isEnabled ? Colors.white : AppColors.btnDisabledText,
+                      ),
+                    ),
             ),
           ),
         ),

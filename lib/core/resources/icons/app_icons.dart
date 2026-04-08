@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 enum AppIcons {
+  settings(iconAndroid: Icons.settings, iconIos: Icons.settings),
   // Исправил опечатку: Icons.profil -> Icons.person
   map(iconAndroid: Icons.map_rounded, iconIos: CupertinoIcons.map_fill),
   ticket(iconAndroid: Icons.confirmation_number_outlined, iconIos: CupertinoIcons.ticket),
@@ -16,10 +17,17 @@ enum AppIcons {
   theme(iconAndroid: Icons.wb_sunny_outlined, iconIos: CupertinoIcons.sun_max),
   check(iconAndroid: Icons.check, iconIos: CupertinoIcons.check_mark),
   photo(iconAndroid: Icons.photo, iconIos: CupertinoIcons.photo),
+  /// Плейсхолдер «добавить фото» (обложка и т.п.).
+  addPhotoAlternate(
+    iconAndroid: Icons.add_photo_alternate_outlined,
+    iconIos: CupertinoIcons.photo_on_rectangle,
+  ),
   folder(iconAndroid: Icons.folder, iconIos: CupertinoIcons.folder),
   add(iconAndroid: Icons.add, iconIos: CupertinoIcons.add),
   delete(iconAndroid: Icons.delete_outline_outlined, iconIos: CupertinoIcons.delete),
   search(iconAndroid: Icons.search, iconIos: CupertinoIcons.search),
+  visibility(iconAndroid: Icons.visibility_outlined, iconIos: CupertinoIcons.eye),
+  visibilityOff(iconAndroid: Icons.visibility_off_outlined, iconIos: CupertinoIcons.eye_slash),
   arrowDown(iconAndroid: Icons.keyboard_arrow_down_rounded, iconIos: Icons.keyboard_arrow_down_rounded),
   checkBox(iconAndroid: Icons.check_box, iconIos: CupertinoIcons.check_mark),
   checkBoxBlank(iconAndroid: Icons.check_box_outline_blank, iconIos: CupertinoIcons.square);

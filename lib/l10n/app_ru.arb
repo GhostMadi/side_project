@@ -1,0 +1,9 @@
+{
+  "@@locale": "ru",
+  "appTitle": "Clover",
+  "editProfileTitle": "Редактировать профиль",
+  "editProfileFieldDone": "Готово",
+  "profileTabLabel": "Профиль",
+  "mapTabLabel": "Карта",
+  "createTabLabel": "Создать"
+}

@@ -1,8 +1,13 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/dimension/app_dimension.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
+import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
+import 'package:side_project/core/shared/app_list_item.dart';
+import 'package:side_project/feature/login_page/presentation/cubit/auth_cubit.dart';
 
 @RoutePage()
 class SettingsPage extends StatefulWidget {
@@ -15,52 +20,89 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
-    // final colors = AppColors;
+    const bg = Colors.white;
+    final chevron = Icon(Icons.chevron_right_rounded, color: AppColors.subTextColor.withValues(alpha: 0.6));
+
     return Scaffold(
+      backgroundColor: bg,
       appBar: AppAppBar(
+        backgroundColor: bg,
         automaticallyImplyLeading: true,
-        title: Text('Settings', style: AppTextStyle.base(19)),
+        title: Text('Настройки', style: AppTextStyle.base(19, fontWeight: FontWeight.w700)),
       ),
       body: ListView(
         padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMiddle),
         children: [
           SizedBox(height: AppDimensions.spaceMiddle),
-
-          Text('General', style: AppTextStyle.base(18, fontWeight: FontWeight.w400)),
-
-          // AppListTile(
-          //   title: Text(
-          //     'Change Language',
-          //     style: AppTextStyle.base(16, weight: FontWeight.w500),
-          //   ),
-          //   leading: Icon(AppIcons.language.icon, color: colors.secondary),
-          //   onTap: () {
-          //     sl<AuthCubit>().signOut();
-          //   },
-          // ),
-          // AppListTile(
-          //   title: Text(
-          //     'Change Theme',
-          //     style: AppTextStyle.base(16, weight: FontWeight.w500),
-          //   ),
-          //   leading: Icon(AppIcons.theme.icon, color: colors.secondary),
-          //   onTap: () {},
-          // ),
-          // SizedBox(height: AppDimensions.spaceMiddle),
-          // Text(
-          //   'Business',
-          //   style: AppTextStyle.base(18, weight: FontWeight.w400),
-          // ),
-          // AppListTile(
-          //   title: Text(
-          //     'Add business',
-          //     style: AppTextStyle.base(16, weight: FontWeight.w500),
-          //   ),
-          //   leading: Icon(AppIcons.addShop.icon, color: colors.secondary),
-          //   onTap: () {
-          //     context.router.push(BusinessRequestsRoute());
-          //   },
-          // ),
+          Text(
+            'Бизнес',
+            style: AppTextStyle.base(14, fontWeight: FontWeight.w800, color: AppColors.subTextColor),
+          ),
+          SizedBox(height: AppDimensions.spaceJunior),
+          AppListTile(
+            title: Text(
+              'Бизнес-аккаунт',
+              style: AppTextStyle.base(16, fontWeight: FontWeight.w600, color: AppColors.textColor),
+            ),
+            subtitle: Text(
+              'График, услуги и запись клиентов',
+              style: AppTextStyle.base(13, height: 1.3, color: AppColors.subTextColor),
+            ),
+            leading: Icon(Icons.storefront_outlined, color: AppColors.btnBackground),
+            trailing: chevron,
+            onTap: () => context.router.push(const BusinessAccountRoute()),
+          ),
+          SizedBox(height: AppDimensions.spaceJunior),
+          AppListTile(
+            title: Text(
+              'Записи',
+              style: AppTextStyle.base(16, fontWeight: FontWeight.w600, color: AppColors.textColor),
+            ),
+            subtitle: Text(
+              'Кто записался, на кого, статус по табам',
+              style: AppTextStyle.base(13, height: 1.3, color: AppColors.subTextColor),
+            ),
+            leading: Icon(Icons.calendar_month_outlined, color: AppColors.btnBackground),
+            trailing: chevron,
+            onTap: () => context.router.push(const BusinessBookingsRoute()),
+          ),
+          SizedBox(height: AppDimensions.spaceMiddle),
+          Text(
+            'Аккаунт',
+            style: AppTextStyle.base(14, fontWeight: FontWeight.w800, color: AppColors.subTextColor),
+          ),
+          SizedBox(height: AppDimensions.spaceJunior),
+          AppListTile(
+            title: Text(
+              'Архивированные',
+              style: AppTextStyle.base(16, fontWeight: FontWeight.w600, color: AppColors.textColor),
+            ),
+            subtitle: Text(
+              'Кластеры и публикации в архиве',
+              style: AppTextStyle.base(13, height: 1.3, color: AppColors.subTextColor),
+            ),
+            leading: Icon(Icons.archive_outlined, color: AppColors.subTextColor),
+            trailing: chevron,
+            onTap: () => context.router.push(const ArchivedRoute()),
+          ),
+          SizedBox(height: AppDimensions.spaceJunior),
+          AppListTile(
+            title: Text(
+              'Выйти',
+              style: AppTextStyle.base(16, fontWeight: FontWeight.w600, color: AppColors.textColor),
+            ),
+            subtitle: Text(
+              'Выход из Google и Supabase на этом устройстве',
+              style: AppTextStyle.base(13, height: 1.3, color: AppColors.subTextColor),
+            ),
+            leading: Icon(Icons.logout_rounded, color: AppColors.subTextColor),
+            onTap: () async {
+              await context.read<AuthCubit>().signOut();
+              if (!context.mounted) return;
+              context.router.replaceAll([const LoginRoute()]);
+            },
+          ),
+          SizedBox(height: AppDimensions.spaceJunior),
         ],
       ),
     );

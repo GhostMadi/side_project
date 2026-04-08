@@ -1,0 +1,12 @@
+{
+  "@@locale": "en",
+  "appTitle": "Clover",
+  "@appTitle": {
+    "description": "Application name"
+  },
+  "editProfileTitle": "Edit profile",
+  "editProfileFieldDone": "Done",
+  "profileTabLabel": "Profile",
+  "mapTabLabel": "Map",
+  "createTabLabel": "Create"
+}

@@ -1,0 +1,18 @@
+---
+description: Core architecture for Flutter app with freezed/get_it/injectable/cubit/auto_route and SRP
+alwaysApply: true
+---
+
+# Project Core Architecture
+
+- Follow SRP strictly: one screen = one responsibility, one cubit = one feature flow.
+- Keep dependency direction clean: `presentation -> domain -> data`; no reverse imports.
+- Use `get_it` + `injectable` for DI only; never create repositories/services directly in widgets.
+- After new/changed `@injectable` registrations, regenerate DI (`build_runner`).
+- Use `cubit` for screen state; avoid business logic inside widgets.
+- Cubit: state + cubit in **one file**; repository contract + **impl in one file**; models with **freezed** (+ json_serializable for API). See `dart-feature-conventions.mdc`.
+- DI: `@injectable` (factory) by default; `@lazySingleton`/`@singleton` only when one shared instance is required.
+- Use `auto_route` for navigation; add typed routes in router config, then regenerate route files.
+- No duplicate sources of truth: keep one canonical data source per feature.
+- `lib/feature_draft/` — черновики; продакшен-фичи — в `lib/feature/<name>/` (см. `dart-feature-conventions.mdc`).
+- Before finishing: run analyzer on touched files and fix introduced issues.
