@@ -1022,16 +1022,36 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     return ia.compareTo(ib) > 0;
   }
 
+  /// При UPDATE Realtime может прислать в `new` только изменённые колонки (без `user_id`).
+  /// Без merge с `old` мы теряли user_id → ранний `return` → галочки не двигались до полного reload.
+  static Map<String, dynamic> _mergedParticipantRealtimeRow(PostgresChangePayload payload) {
+    final merged = Map<String, dynamic>.from(payload.oldRecord);
+    merged.addAll(payload.newRecord);
+    return merged;
+  }
+
   void _onChatParticipantsRealtimeUpdate(PostgresChangePayload payload) {
     if (payload.eventType != PostgresChangeEvent.update) return;
-    final raw = payload.newRecord;
+    final raw = _mergedParticipantRealtimeRow(payload);
     if (raw.isEmpty) return;
-    final uidRow = _normUuid(raw['user_id']?.toString());
+
+    dynamic column(String snake) {
+      final s = snake.toLowerCase();
+      for (final e in raw.entries) {
+        if (e.key.toString().toLowerCase() == s) return e.value;
+      }
+      return null;
+    }
+
+    final uidRow = _normUuid(column('user_id')?.toString());
     final myId = _normUuid(_client.auth.currentUser?.id);
     if (uidRow == null || uidRow.isEmpty || myId == null || myId.isEmpty) return;
     if (uidRow == myId) return;
-    final lrStr = raw['last_read_message_id']?.toString().trim();
-    _peerLastReadByUserId[uidRow] = (lrStr == null || lrStr.isEmpty) ? null : lrStr;
+
+    final lrRaw = column('last_read_message_id');
+    final lrTrim = lrRaw?.toString().trim();
+    _peerLastReadByUserId[uidRow] =
+        lrTrim == null || lrTrim.isEmpty ? null : (_normUuid(lrTrim) ?? lrTrim.toLowerCase());
 
     final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (loaded == null) return;
@@ -1156,13 +1176,17 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         filter: convFilter,
         callback: onMessagesChange,
       )
-      // Собеседник вызвал mark_conversation_read — строка участника UPDATE; без debounce, чтобы галочки у отправителя обновились сразу.
+      // Собеседник вызвал mark_conversation_read — UPDATE строки участника. Слушаем `all`, внутри отфильтровываем UPDATE
+      // (на некоторых конфигурациях binding UPDATE-only расходится с сервером).
       ..onPostgresChanges(
-        event: PostgresChangeEvent.update,
+        event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'chat_participants',
         filter: convFilter,
-        callback: _onChatParticipantsRealtimeUpdate,
+        callback: (PostgresChangePayload payload) {
+          if (payload.eventType != PostgresChangeEvent.update) return;
+          _onChatParticipantsRealtimeUpdate(payload);
+        },
       )
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
