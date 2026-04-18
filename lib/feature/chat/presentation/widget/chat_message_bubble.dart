@@ -28,6 +28,11 @@ ChatBubbleChain _chatBubbleChainFromFlags({required bool groupWithPrevious, requ
   return ChatBubbleChain.last;
 }
 
+bool _chatUuidEq(String? a, String? b) {
+  if (a == null || b == null) return false;
+  return a.trim().toLowerCase() == b.trim().toLowerCase();
+}
+
 String _replyKindShortLabel(String kind) {
   switch (kind) {
     case 'post_ref':
@@ -363,7 +368,7 @@ class ChatMessageBubble extends StatelessWidget {
     );
     return item.when(
       server: (data) {
-        final isMine = myId != null && myId == data.message.senderId;
+        final isMine = _chatUuidEq(myId, data.message.senderId);
         final fg = isMine ? AppColors.textInverse : AppColors.textColor;
         final timeText = formatChatTime(data.message.createdAt);
 

@@ -91,6 +91,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
 
   static String _localId() => 'local_${DateTime.now().microsecondsSinceEpoch}';
 
+  /// Supabase Auth и uuid в Postgres могут отличаться регистром — без нормализации «мои» исходящие не матчятся и read_by_peer не патчится.
+  static String? _normUuid(String? raw) {
+    final s = raw?.trim().toLowerCase();
+    if (s == null || s.isEmpty) return null;
+    return s;
+  }
+
   /// Детерминированный порядок: одинаковый created_at возможен — различаем по id.
   static int _compareEnrichedMessages(ChatMessageEnriched a, ChatMessageEnriched b) {
     final byTime = a.message.createdAt.compareTo(b.message.createdAt);
@@ -267,6 +274,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       _flushPendingMessageInserts(cid);
       await _syncPeerReadCursorsFromServer(cid);
       _peerReadMapReady = true;
+      _applyPeerReadByPeerLocally();
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: serverSnapshotForPersistence));
       }
@@ -296,6 +304,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       _emitIfOpen(_withServerViewRevision(state, _reconcileWithOptimistic(cur, mergedList)));
       await _syncPeerReadCursorsFromServer(cid);
       _peerReadMapReady = true;
+      _applyPeerReadByPeerLocally();
       final uid = _client.auth.currentUser?.id.trim();
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: mergedList));
@@ -986,9 +995,11 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       if (cid.isEmpty) return;
       final m = await _repo.peerLastReadCursors(cid);
       if (isClosed) return;
-      _peerLastReadByUserId
-        ..clear()
-        ..addAll(m);
+      _peerLastReadByUserId.clear();
+      for (final e in m.entries) {
+        final k = _normUuid(e.key);
+        if (k != null) _peerLastReadByUserId[k] = e.value;
+      }
     } catch (_) {}
   }
 
@@ -997,15 +1008,17 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     final c = a.createdAt.compareTo(b.createdAt);
     if (c > 0) return true;
     if (c < 0) return false;
-    return a.id.compareTo(b.id) > 0;
+    final ia = _normUuid(a.id) ?? a.id.trim();
+    final ib = _normUuid(b.id) ?? b.id.trim();
+    return ia.compareTo(ib) > 0;
   }
 
   void _onChatParticipantsRealtimeUpdate(PostgresChangePayload payload) {
     if (payload.eventType != PostgresChangeEvent.update) return;
     final raw = payload.newRecord;
     if (raw.isEmpty) return;
-    final uidRow = raw['user_id']?.toString().trim();
-    final myId = _client.auth.currentUser?.id.trim();
+    final uidRow = _normUuid(raw['user_id']?.toString());
+    final myId = _normUuid(_client.auth.currentUser?.id);
     if (uidRow == null || uidRow.isEmpty || myId == null || myId.isEmpty) return;
     if (uidRow == myId) return;
     final lrStr = raw['last_read_message_id']?.toString().trim();
@@ -1020,16 +1033,17 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   void _applyPeerReadByPeerLocally() {
     final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (loaded == null) return;
-    final myId = _client.auth.currentUser?.id.trim();
+    final myId = _normUuid(_client.auth.currentUser?.id);
     if (myId == null || myId.isEmpty) return;
 
     final byId = <String, ChatMessageModel>{};
     for (final e in _serverMessagesMapFromThreadItems(loaded.items).values) {
-      byId[e.message.id] = e.message;
+      final nk = _normUuid(e.message.id);
+      if (nk != null) byId[nk] = e.message;
     }
 
     for (final cursorId in _peerLastReadByUserId.values) {
-      final id = cursorId?.trim();
+      final id = _normUuid(cursorId);
       if (id == null || id.isEmpty) continue;
       if (!byId.containsKey(id)) {
         _scheduleDebouncedFullRefresh();
@@ -1074,7 +1088,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     String myId,
     Map<String, ChatMessageModel> byId,
   ) {
-    if (m.senderId.trim() != myId) return m;
+    if (_normUuid(m.senderId) != myId) return m;
     if (!_peerReadMapReady) return m;
     final next = _readByPeerForOutgoing(m, myId, byId);
     if (next == m.readByPeer) return m;
@@ -1088,7 +1102,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   ) {
     if (_peerLastReadByUserId.isEmpty) return false;
     for (final cursorId in _peerLastReadByUserId.values) {
-      final raw = cursorId?.trim();
+      final raw = _normUuid(cursorId);
       if (raw == null || raw.isEmpty) return false;
       final rm = byId[raw];
       if (rm == null) return m.readByPeer;
