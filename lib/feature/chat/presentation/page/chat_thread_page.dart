@@ -25,10 +25,31 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Нижний край ленты (новые сообщения снизу): пользователь «видит» хвост — можно слать mark_read.
 bool _chatThreadScrollNearBottomForRead(ScrollMetrics m) {
   if (!m.hasViewportDimension) return false;
-  const threshold = 88.0;
+  /// Чуть шире, чем типичный «безопасный» inset: после programmatic `jumpTo` позиция иногда ещё не до конца на первом кадре.
+  const threshold = 120.0;
   final max = m.maxScrollExtent;
   if (max <= 0) return true;
   return m.pixels >= max - threshold;
+}
+
+/// Одна проверка через 450ms часто промахивается: `jumpTo(max)` ещё не применился или нет ScrollNotification.
+/// Повторяем с задержками — иначе у собеседника долго не уходит mark_read → у отправителя не меняются галочки до перезахода.
+void _scheduleMarkReadRetriesWhenNearBottom(BuildContext context, ScrollController scroll) {
+  const delaysMs = <int>[350, 700, 1100, 1700];
+
+  void attempt(int index) {
+    if (index >= delaysMs.length) return;
+    Future<void>.delayed(Duration(milliseconds: delaysMs[index]), () {
+      if (!context.mounted || !scroll.hasClients) return;
+      if (_chatThreadScrollNearBottomForRead(scroll.position)) {
+        context.read<ChatThreadCubit>().scheduleMarkReadAfterViewingBottom();
+        return;
+      }
+      attempt(index + 1);
+    });
+  }
+
+  attempt(0);
 }
 
 @RoutePage()
@@ -175,12 +196,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             state.maybeMap(
               loaded: (loaded) {
                 void scheduleReadIfStillAtBottom() {
-                  Future<void>.delayed(const Duration(milliseconds: 450), () {
-                    if (!context.mounted || !_scrollController.hasClients) return;
-                    if (_chatThreadScrollNearBottomForRead(_scrollController.position)) {
-                      context.read<ChatThreadCubit>().scheduleMarkReadAfterViewingBottom();
-                    }
-                  });
+                  _scheduleMarkReadRetriesWhenNearBottom(context, _scrollController);
                 }
 
                 if (loaded.items.isEmpty) {
