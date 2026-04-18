@@ -47,8 +47,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   static const _mergeRetryDelay = Duration(milliseconds: 60);
   static const _debounceRealtimeRefresh = Duration(milliseconds: 140);
 
+  /// После того как пользователь прокрутил к концу ленты — один RPC mark_read (не на каждый апсерт сообщения).
+  static const _readReceiptDebounceWindow = Duration(milliseconds: 400);
+
   RealtimeChannel? _channel;
   Timer? _debounceReload;
+  Timer? _readReceiptDebounce;
+  String? _lastMarkedReadMessageId;
 
   /// Пока [load] ждёт `list_messages_enriched`, INSERT уже мог прийти по WS — обработаем после перехода в loaded.
   final List<Map<String, dynamic>> _pendingMessageInsertRows = [];
@@ -209,6 +214,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     }
     _pendingMessageInsertRows.clear();
     _skipRpcEnrichmentIds.clear();
+    _readReceiptDebounce?.cancel();
+    _lastMarkedReadMessageId = null;
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
       final cached = await _cache.read(userId: uid, conversationId: cid);
@@ -254,14 +261,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: serverSnapshotForPersistence));
       }
-      // Mark read best-effort.
-      if (serverSnapshotForPersistence.isNotEmpty) {
-        unawaited(
-          _repo.markRead(conversationId: cid, lastMessageId: serverSnapshotForPersistence.last.message.id),
-        );
-      } else {
-        unawaited(_repo.markRead(conversationId: cid));
-      }
+      // Прочитано только когда пользователь докрутил до конца — см. [scheduleMarkReadAfterViewingBottom] на странице.
     } catch (e) {
       final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (loaded != null && loaded.conversationId.trim() == cid) {
@@ -298,6 +298,35 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         _emitIfOpen(again.copyWith(errorMessage: '$e'));
       }
     }
+  }
+
+  /// Вызывать со страницы, когда скролл у нижнего края ленты (пользователь видит последние сообщения).
+  void scheduleMarkReadAfterViewingBottom() {
+    _readReceiptDebounce?.cancel();
+    _readReceiptDebounce = Timer(_readReceiptDebounceWindow, () {
+      if (isClosed) return;
+      final mid = _latestServerMessageIdForReadCursor();
+      if (mid == null || mid.isEmpty) return;
+      if (mid == _lastMarkedReadMessageId) return;
+      final cid = state.maybeMap(loaded: (v) => v.conversationId.trim(), orElse: () => '');
+      if (cid.isEmpty) return;
+      _lastMarkedReadMessageId = mid;
+      unawaited(_repo.markRead(conversationId: cid, lastMessageId: mid));
+    });
+  }
+
+  String? _latestServerMessageIdForReadCursor() {
+    final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (loaded == null || loaded.items.isEmpty) return null;
+    for (var i = loaded.items.length - 1; i >= 0; i--) {
+      final id = loaded.items[i].when(
+        server: (d) => d.message.id,
+        optimisticText: (_, __, ___, ____, server, _, _, _, _) => server?.message.id,
+        optimisticAttachments: (_, __, ___, ____, _____, server, _, _, _, _) => server?.message.id,
+      );
+      if (id != null && id.isNotEmpty) return id;
+    }
+    return null;
   }
 
   Future<void> loadMore() async {
@@ -902,12 +931,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (uid != null && uid.isNotEmpty) {
       unawaited(_cache.write(userId: uid, conversationId: conversationId, messages: serverMsgs));
     }
-    unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 80), () {
-        if (isClosed) return;
-        unawaited(_repo.markRead(conversationId: conversationId, lastMessageId: row.message.id));
-      }),
-    );
+    // mark_read только при прокрутке к концу ([scheduleMarkReadAfterViewingBottom]), не на каждый INSERT/broadcast.
   }
 
   void _markSkipRpcEnrichment(String messageId) {
@@ -1027,6 +1051,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   @override
   Future<void> close() async {
     _debounceReload?.cancel();
+    _readReceiptDebounce?.cancel();
     _pendingMessageInsertRows.clear();
     _skipRpcEnrichmentIds.clear();
     await _channel?.unsubscribe();

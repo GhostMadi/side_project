@@ -22,6 +22,15 @@ import 'package:side_project/feature/chat/presentation/widget/chat_thread_messag
 import 'package:side_project/feature/chat/presentation/widget/chat_thread_timeline_utils.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Нижний край ленты (новые сообщения снизу): пользователь «видит» хвост — можно слать mark_read.
+bool _chatThreadScrollNearBottomForRead(ScrollMetrics m) {
+  if (!m.hasViewportDimension) return false;
+  const threshold = 88.0;
+  final max = m.maxScrollExtent;
+  if (max <= 0) return true;
+  return m.pixels >= max - threshold;
+}
+
 @RoutePage()
 class ChatThreadPage extends StatefulWidget {
   const ChatThreadPage({super.key, required this.conversationId});
@@ -165,6 +174,15 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             if (_suppressListenerScroll) return;
             state.maybeMap(
               loaded: (loaded) {
+                void scheduleReadIfStillAtBottom() {
+                  Future<void>.delayed(const Duration(milliseconds: 450), () {
+                    if (!context.mounted || !_scrollController.hasClients) return;
+                    if (_chatThreadScrollNearBottomForRead(_scrollController.position)) {
+                      context.read<ChatThreadCubit>().scheduleMarkReadAfterViewingBottom();
+                    }
+                  });
+                }
+
                 if (loaded.items.isEmpty) {
                   _scrollToBottomAfterFrame();
                   return;
@@ -172,6 +190,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                 final prevLoaded = prev?.maybeMap(loaded: (s) => s, orElse: () => null);
                 if (prevLoaded == null || prevLoaded.items.isEmpty) {
                   _scrollToBottomAfterFrame();
+                  scheduleReadIfStillAtBottom();
                   return;
                 }
                 final tailChanged =
@@ -182,6 +201,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                     if (mounted) setState(() => _entranceFocusId = null);
                   });
                   _scrollToBottomAfterFrame();
+                  scheduleReadIfStillAtBottom();
                 }
               },
               orElse: () {},
@@ -197,6 +217,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
               builder: (context) {
                 final bottomGap = MediaQuery.viewPaddingOf(context).bottom + 70;
                 return _ChatThreadResumeSync(
+                  scrollController: _scrollController,
                   child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -218,15 +239,23 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                                     if (_shouldLoadOlder(n, hasMore, isLoadingMore)) {
                                       context.read<ChatThreadCubit>().loadMore();
                                     }
+                                    if ((n is ScrollUpdateNotification || n is ScrollEndNotification) &&
+                                        n.metrics.axis == Axis.vertical &&
+                                        _chatThreadScrollNearBottomForRead(n.metrics)) {
+                                      context.read<ChatThreadCubit>().scheduleMarkReadAfterViewingBottom();
+                                    }
                                     return false;
                                   },
                                   child: AppRefresh(
                                     onRefresh: () async {
                                       _suppressListenerScroll = true;
                                       try {
-                                        await context
-                                            .read<ChatThreadCubit>()
-                                            .refresh(syncReadReceipt: true);
+                                        await context.read<ChatThreadCubit>().refresh(syncReadReceipt: false);
+                                        if (context.mounted &&
+                                            _scrollController.hasClients &&
+                                            _chatThreadScrollNearBottomForRead(_scrollController.position)) {
+                                          context.read<ChatThreadCubit>().scheduleMarkReadAfterViewingBottom();
+                                        }
                                       } finally {
                                         _suppressListenerScroll = false;
                                       }
@@ -370,10 +399,11 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   }
 }
 
-/// `refresh` при возврате в приложение (без периодического poll — только realtime + это).
+/// После возврата из фона: синк ленты без mark_read; mark_read только если пользователь всё ещё у нижнего края.
 class _ChatThreadResumeSync extends StatefulWidget {
-  const _ChatThreadResumeSync({required this.child});
+  const _ChatThreadResumeSync({required this.scrollController, required this.child});
 
+  final ScrollController scrollController;
   final Widget child;
 
   @override
@@ -397,9 +427,14 @@ class _ChatThreadResumeSyncState extends State<_ChatThreadResumeSync> with Widge
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state != AppLifecycleState.resumed) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      unawaited(context.read<ChatThreadCubit>().refresh(syncReadReceipt: true));
+      await context.read<ChatThreadCubit>().refresh(syncReadReceipt: false);
+      if (!mounted) return;
+      if (widget.scrollController.hasClients &&
+          _chatThreadScrollNearBottomForRead(widget.scrollController.position)) {
+        context.read<ChatThreadCubit>().scheduleMarkReadAfterViewingBottom();
+      }
     });
   }
 
