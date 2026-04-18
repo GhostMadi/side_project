@@ -124,7 +124,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   List<ChatMessageEnriched> _dedupeEnrichedByMessageId(List<ChatMessageEnriched> list) {
     final byId = <String, ChatMessageEnriched>{};
     for (final e in list) {
-      byId[e.message.id] = e;
+      final k = _normUuid(e.message.id);
+      if (k != null) byId[k] = e;
     }
     return byId.values.toList()..sort(_compareEnrichedMessages);
   }
@@ -182,25 +183,31 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     List<ChatMessageEnriched> fetched,
   ) {
     final byId = <String, ChatMessageEnriched>{};
+    void putServer(ChatMessageEnriched e) {
+      final k = _normUuid(e.message.id);
+      if (k != null) byId[k] = e;
+    }
     for (final it in visible.items) {
       it.maybeWhen(
-        server: (d) => byId[d.message.id] = d,
+        server: putServer,
         optimisticText: (_, __, ___, ____, server, _, _, _, _) {
-          if (server != null) byId[server.message.id] = server;
+          if (server != null) putServer(server);
         },
         optimisticAttachments: (_, __, ___, ____, _____, server, _, _, _, _) {
-          if (server != null) byId[server.message.id] = server;
+          if (server != null) putServer(server);
         },
         orElse: () {},
       );
     }
     for (final m in fetched) {
-      final prev = byId[m.message.id];
+      final kid = _normUuid(m.message.id);
+      if (kid == null) continue;
+      final prev = byId[kid];
       if (prev != null) {
         final rb = prev.message.readByPeer || m.message.readByPeer;
-        byId[m.message.id] = m.copyWith(message: m.message.copyWith(readByPeer: rb));
+        byId[kid] = m.copyWith(message: m.message.copyWith(readByPeer: rb));
       } else {
-        byId[m.message.id] = m;
+        byId[kid] = m;
       }
     }
     final merged = byId.values.toList()..sort(_compareEnrichedMessages);
@@ -211,7 +218,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   /// Все серверные [ChatMessageEnriched] из ленты: верхнеуровневые и вложенные в synced optimistic.
   Map<String, ChatMessageEnriched> _serverMessagesMapFromThreadItems(List<ChatThreadItem> items) {
     final byId = <String, ChatMessageEnriched>{};
-    void put(ChatMessageEnriched m) => byId[m.message.id] = m;
+    void put(ChatMessageEnriched m) {
+      final k = _normUuid(m.message.id);
+      if (k != null) byId[k] = m;
+    }
     for (final it in items) {
       it.maybeWhen(
         server: put,
@@ -947,7 +957,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (row.message.conversationId.trim() != conversationId) return;
 
     final byMsgId = _serverMessagesMapFromThreadItems(s.items);
-    byMsgId[row.message.id] = row;
+    final rowKey = _normUuid(row.message.id);
+    if (rowKey == null) return;
+    byMsgId[rowKey] = row;
     var serverMsgs = byMsgId.values.toList()..sort(_compareEnrichedMessages);
     while (serverMsgs.length > _fetchLimit) {
       serverMsgs.removeAt(0);
@@ -955,10 +967,16 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
 
     final emitBase = state;
     _emitIfOpen(_withServerViewRevision(emitBase, _reconcileWithOptimistic(s, serverMsgs)));
+    _syncReadReceiptsAfterServerRowMutation();
 
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
-      unawaited(_cache.write(userId: uid, conversationId: conversationId, messages: serverMsgs));
+      final postRead = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (postRead != null) {
+        final snap = _serverMessagesMapFromThreadItems(postRead.items).values.toList()
+          ..sort(_compareEnrichedMessages);
+        unawaited(_cache.write(userId: uid, conversationId: conversationId, messages: snap));
+      }
     }
     // mark_read только при прокрутке к концу ([scheduleMarkReadAfterViewingBottom]), не на каждый INSERT/broadcast.
   }
@@ -1056,6 +1074,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (loaded == null) return;
     if (!_peerReadMapReady) return;
+    _applyPeerReadByPeerLocally();
+  }
+
+  /// После апсерта сообщения из RPC (`get_message_enriched` / превью с WAL) свежая строка часто приходит с read_by_peer=false,
+  /// пока курсор собеседника у нас в [_peerLastReadByUserId] уже актуален — без второго прохода галочки «съедаются».
+  void _syncReadReceiptsAfterServerRowMutation() {
+    if (!_peerReadMapReady || isClosed) return;
     _applyPeerReadByPeerLocally();
   }
 
