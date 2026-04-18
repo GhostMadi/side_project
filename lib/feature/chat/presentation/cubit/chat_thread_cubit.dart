@@ -87,6 +87,27 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     return a.message.id.compareTo(b.message.id);
   }
 
+  static DateTime _threadItemSortTime(ChatThreadItem it) {
+    return it.when(
+      server: (d) => d.message.createdAt,
+      optimisticText: (_, __, ___, createdAt, ____, _____) => createdAt,
+      optimisticAttachments: (_, __, createdAt, ___, ____, _____, ______) => createdAt,
+    );
+  }
+
+  /// Хронология ленты: время, затем стабильный ключ (uuid сообщения / client_id / local id).
+  static int _compareThreadItemsChrono(ChatThreadItem a, ChatThreadItem b) {
+    final byT = _threadItemSortTime(a).compareTo(_threadItemSortTime(b));
+    if (byT != 0) return byT;
+    return a.stableBubbleKey.compareTo(b.stableBubbleKey);
+  }
+
+  List<ChatThreadItem> _sortedThreadItems(List<ChatThreadItem> items) {
+    final out = List<ChatThreadItem>.from(items);
+    out.sort(_compareThreadItemsChrono);
+    return out;
+  }
+
   void _bumpThreadRealtimeActivity() {
     _lastThreadRealtimeActivityAt = DateTime.now();
   }
@@ -228,10 +249,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         limit: _fetchLimit,
         before: before,
       );
-      final merged = [
+      final merged = _sortedThreadItems([
         ...older.map(ChatThreadItem.server),
         ...s.items,
-      ];
+      ]);
       emit(_withServerViewRevision(
         state,
         s.copyWith(
@@ -259,7 +280,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       createdAt: DateTime.now(),
       delivery: ChatOptimisticDelivery.sending,
     );
-    emit(s.copyWith(items: [...s.items, optimistic], errorMessage: null));
+    emit(s.copyWith(items: _sortedThreadItems([...s.items, optimistic]), errorMessage: null));
     unawaited(_completeOptimisticTextSend(localId: localId, text: t, conversationId: s.conversationId));
   }
 
@@ -290,7 +311,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       caption: caption,
       delivery: ChatOptimisticDelivery.sending,
     );
-    emit(s.copyWith(items: [...s.items, optimistic], errorMessage: null));
+    emit(s.copyWith(items: _sortedThreadItems([...s.items, optimistic]), errorMessage: null));
     unawaited(
       _completeOptimisticAttachmentsSend(
         localId: localId,
@@ -629,9 +650,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       filteredServer.add(it);
     }
 
-    // Final list = server (filtered) + optimistic (keeps stable keys/position).
+    // Одна хронология: серверные + optimistic (раньше optimistic всегда в конце — ломало порядок по времени).
     return prev.copyWith(
-      items: [...filteredServer, ...updatedOptimistic],
+      items: _sortedThreadItems([...filteredServer, ...updatedOptimistic]),
       hasMore: serverMessages.length >= _fetchLimit,
       errorMessage: null,
     );
