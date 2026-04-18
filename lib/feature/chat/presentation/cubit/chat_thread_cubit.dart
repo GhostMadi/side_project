@@ -49,7 +49,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   static const _debounceRealtimeRefresh = Duration(milliseconds: 140);
 
   /// После того как пользователь прокрутил к концу ленты — один RPC mark_read (не на каждый апсерт сообщения).
-  static const _readReceiptDebounceWindow = Duration(milliseconds: 400);
+  static const _readReceiptDebounceWindow = Duration(milliseconds: 500);
 
   RealtimeChannel? _channel;
   Timer? _debounceReload;
@@ -174,6 +174,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
 
   /// Следующий `list_messages_enriched` может прийти без новой строки (лаг реплики). Объединяем с тем,
   /// что уже показано, иначе refresh «съедает» сообщение, которое только что докинули через Realtime/merge.
+  ///
+  /// Для совпадающего `message.id`: ответ RPC перезаписывает строку, но **`read_by_peer`** берём как логическое ИЛИ
+  /// с уже видимым состоянием — иначе локальные галочки после WS обнуляются при устаревшем RPC (лаг реплики).
   List<ChatMessageEnriched> _mergeFetchedWithVisibleServer(
     _ChatThreadLoaded visible,
     List<ChatMessageEnriched> fetched,
@@ -192,7 +195,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       );
     }
     for (final m in fetched) {
-      byId[m.message.id] = m;
+      final prev = byId[m.message.id];
+      if (prev != null) {
+        final rb = prev.message.readByPeer || m.message.readByPeer;
+        byId[m.message.id] = m.copyWith(message: m.message.copyWith(readByPeer: rb));
+      } else {
+        byId[m.message.id] = m;
+      }
     }
     final merged = byId.values.toList()..sort(_compareEnrichedMessages);
     if (merged.length <= _fetchLimit) return merged;
@@ -1003,7 +1012,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     } catch (_) {}
   }
 
-  /// Совпадает с SQL в `list_messages_enriched`: сообщение строго после курсора «прочитано до».
+  /// Совпадает с SQL в `list_messages_enriched`: порядок хронологический `(created_at, id)`, не сравнение UUID как строк.
   static bool _lexMsgStrictlyAfter(ChatMessageModel a, ChatMessageModel b) {
     final c = a.createdAt.compareTo(b.createdAt);
     if (c > 0) return true;
@@ -1030,6 +1039,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     _applyPeerReadByPeerLocally();
   }
 
+  /// Галочки после `UPDATE chat_participants`: только патч локального состояния по курсорам собеседников —
+  /// без `list_messages_enriched` и без полного refresh.
   void _applyPeerReadByPeerLocally() {
     final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (loaded == null) return;
