@@ -91,7 +91,7 @@ class ChatMessageBubble extends StatelessWidget {
           bubble = _TelegramBubble(
             id: data.message.id,
             isMine: isMine,
-            body: _ServerAlbumAndFiles(data: data, fg: fg),
+            body: _ServerAlbumAndFiles(data: data, fg: fg, heroScopeId: item.stableBubbleKey),
             timeText: timeText,
             trailing: trailing,
           );
@@ -161,7 +161,7 @@ class ChatMessageBubble extends StatelessWidget {
         final timeText = formatChatTime(at);
 
         final body = server != null
-            ? _ServerAlbumAndFiles(data: server, fg: fg)
+            ? _ServerAlbumAndFiles(data: server, fg: fg, heroScopeId: item.stableBubbleKey)
             : _OptimisticOutgoingAlbum(parts: parts, caption: caption, fg: fg);
 
         Widget bubble = _TelegramBubble(
@@ -465,10 +465,17 @@ class _TelegramBubble extends StatelessWidget {
 }
 
 class _ServerAlbumAndFiles extends StatelessWidget {
-  const _ServerAlbumAndFiles({required this.data, required this.fg});
+  const _ServerAlbumAndFiles({
+    required this.data,
+    required this.fg,
+    required this.heroScopeId,
+  });
 
   final ChatMessageEnriched data;
   final Color fg;
+
+  /// Уникальность Hero в ленте: строка сообщения + id вложения (не только message.id + индекс).
+  final String heroScopeId;
 
   /// Фото и видео в сетке; остальное — строки файлов.
   static bool _isAlbumVisual(ChatMessageAttachmentModel a) {
@@ -503,7 +510,7 @@ class _ServerAlbumAndFiles extends StatelessWidget {
     final gallery = _galleryItems(visuals);
     final heroTags = List<String?>.generate(
       gallery.length,
-      (i) => gallery[i].isVideo ? null : 'chat_gallery_${data.message.id}_$i',
+      (i) => gallery[i].isVideo ? null : 'chat_gallery_${heroScopeId}_${visuals[i].id}',
     );
 
     Widget wrapTap({required int index, required Widget child}) {

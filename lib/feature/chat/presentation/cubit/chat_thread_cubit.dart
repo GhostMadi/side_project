@@ -506,20 +506,28 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
 
   void _subscribeRealtime(String conversationId) {
     _channel?.unsubscribe();
+    final cidNorm = conversationId.trim().toLowerCase();
     _channel = _client.channel('chat_thread_$conversationId');
 
-    // Filter by conversation_id on messages.
+    // Do not use PostgresChangeFilter on conversation_id: server-side eq on UUID
+    // often fails to match, so no events arrive while the list (unfiltered) still updates.
+    // RLS still limits which rows we receive; we filter to this thread in the callback.
+    bool messageBelongsToThread(PostgresChangePayload payload) {
+      final fromNew = payload.newRecord['conversation_id'];
+      final fromOld = payload.oldRecord['conversation_id'];
+      final raw = fromNew ?? fromOld;
+      if (raw == null) return false;
+      return raw.toString().trim().toLowerCase() == cidNorm;
+    }
+
     _channel!
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'chat_messages',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'conversation_id',
-          value: conversationId,
-        ),
-        callback: (_) => _scheduleReload(),
+        callback: (payload) {
+          if (messageBelongsToThread(payload)) _scheduleReload();
+        },
       )
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
