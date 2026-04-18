@@ -22,6 +22,9 @@ abstract class ChatRepository {
   /// Одна строка в формате [listMessages] — для подстановки после Realtime без полного списка.
   Future<ChatMessageEnriched?> getMessageEnriched(String messageId);
 
+  /// Только INSERT из Realtime/WAL: без RPC, профиль отправителя — заглушка до [getMessageEnriched].
+  ChatMessageEnriched? enrichedFromRealtimeInsertRow(Map<String, dynamic>? raw);
+
   Future<String> sendText({
     required String conversationId,
     required String text,

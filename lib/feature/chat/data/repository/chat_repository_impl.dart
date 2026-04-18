@@ -138,6 +138,54 @@ class ChatRepositoryImpl implements ChatRepository {
     }
   }
 
+  /// Строка из Supabase Realtime `postgres_changes` для `chat_messages`.
+  static Map<String, dynamic> _normalizeChatMessageInsert(Map<String, dynamic> raw) {
+    final m = Map<String, dynamic>.from(raw);
+    void coerceId(String key) {
+      final v = m[key];
+      if (v != null) m[key] = v.toString();
+    }
+
+    coerceId('id');
+    coerceId('conversation_id');
+    coerceId('sender_id');
+    coerceId('reply_to_message_id');
+    coerceId('forwarded_from_message_id');
+
+    final k = m['kind'];
+    if (k != null) {
+      final s = k.toString();
+      m['kind'] = s.contains('.') ? s.split('.').last : s;
+    }
+
+    Object? iso(Object? v) {
+      if (v == null) return null;
+      if (v is String) return v;
+      if (v is DateTime) return v.toUtc().toIso8601String();
+      return v.toString();
+    }
+
+    m['created_at'] = iso(m['created_at']);
+    m['edited_at'] = iso(m['edited_at']);
+    m['deleted_at'] = iso(m['deleted_at']);
+    return m;
+  }
+
+  @override
+  ChatMessageEnriched? enrichedFromRealtimeInsertRow(Map<String, dynamic>? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      if (raw['deleted_at'] != null) return null;
+      final message = ChatMessageModel.fromJson(_normalizeChatMessageInsert(raw));
+      return ChatMessageEnriched(
+        message: message,
+        sender: ChatProfileMiniModel(id: message.senderId, username: null, avatarUrl: null),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<String> sendText({
     required String conversationId,

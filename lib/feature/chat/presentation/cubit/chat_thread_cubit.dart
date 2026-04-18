@@ -578,20 +578,34 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     );
   }
 
-  /// Новое сообщение из Realtime: одна строка через RPC — без полного списка и без лишних POST.
-  Future<void> _mergeIncomingMessageRow(String messageId, {int attempt = 0}) async {
+  /// Новое сообщение из Realtime: сначала строка WAL (как в списке чатов), затем RPC для полной строки.
+  Future<void> _mergeIncomingMessageRow(
+    String messageId, {
+    Map<String, dynamic>? insertRow,
+    int attempt = 0,
+  }) async {
     final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (s == null) return;
     final conversationId = s.conversationId.trim();
+
+    final fast =
+        insertRow != null && insertRow.isNotEmpty ? _repo.enrichedFromRealtimeInsertRow(insertRow) : null;
+    if (fast != null) {
+      final liveFast = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (liveFast != null && liveFast.conversationId.trim() == conversationId) {
+        await _emitThreadWithEnrichedUpsert(fast);
+      }
+    }
 
     var row = await _repo.getMessageEnriched(messageId);
     if (row == null && attempt == 0) {
       await Future<void>.delayed(_mergeRetryDelay);
       if (isClosed) return;
-      await _mergeIncomingMessageRow(messageId, attempt: 1);
+      await _mergeIncomingMessageRow(messageId, insertRow: null, attempt: 1);
       return;
     }
     if (row == null) {
+      if (fast != null) return;
       await refresh();
       return;
     }
@@ -601,29 +615,40 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     final live = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (live == null || live.conversationId.trim() != conversationId) return;
 
+    await _emitThreadWithEnrichedUpsert(row);
+  }
+
+  Future<void> _emitThreadWithEnrichedUpsert(ChatMessageEnriched row) async {
+    final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (s == null) return;
+    final conversationId = s.conversationId.trim();
+    if (row.message.conversationId.trim() != conversationId) return;
+
     final serverMsgs = <ChatMessageEnriched>[];
-    for (final it in live.items) {
+    for (final it in s.items) {
       it.maybeWhen(
         server: (d) => serverMsgs.add(d),
         orElse: () {},
       );
     }
-    if (serverMsgs.any((m) => m.message.id == row.message.id)) return;
-
-    serverMsgs.add(row);
+    final idx = serverMsgs.indexWhere((m) => m.message.id == row.message.id);
+    if (idx >= 0) {
+      serverMsgs[idx] = row;
+    } else {
+      serverMsgs.add(row);
+    }
     serverMsgs.sort(_compareEnrichedMessages);
     while (serverMsgs.length > _fetchLimit) {
       serverMsgs.removeAt(0);
     }
 
     final emitBase = state;
-    emit(_withServerViewRevision(emitBase, _reconcileWithOptimistic(live, serverMsgs)));
+    emit(_withServerViewRevision(emitBase, _reconcileWithOptimistic(s, serverMsgs)));
 
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
       unawaited(_cache.write(userId: uid, conversationId: conversationId, messages: serverMsgs));
     }
-    // Не блокируем появление пузыря — прочитано уходит после отрисовки.
     unawaited(
       Future<void>.delayed(const Duration(milliseconds: 80), () {
         if (isClosed) return;
@@ -669,7 +694,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       if (payload.eventType == PostgresChangeEvent.insert) {
         final rawId = payload.newRecord['id'];
         if (rawId != null) {
-          unawaited(_mergeIncomingMessageRow(rawId.toString()));
+          unawaited(_mergeIncomingMessageRow(rawId.toString(), insertRow: payload.newRecord));
         }
         return;
       }
