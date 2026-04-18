@@ -1048,6 +1048,15 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     return merged;
   }
 
+  static String? _conversationIdFromMergedRow(Map<String, dynamic> merged) {
+    for (final e in merged.entries) {
+      if (e.key.toString().toLowerCase() == 'conversation_id') {
+        return _normUuid(e.value?.toString());
+      }
+    }
+    return null;
+  }
+
   void _onChatParticipantsRealtimeUpdate(PostgresChangePayload payload) {
     if (payload.eventType != PostgresChangeEvent.update) return;
     final raw = _mergedParticipantRealtimeRow(payload);
@@ -1172,8 +1181,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     final cid = conversationId.trim().toLowerCase();
     if (cid.isEmpty) return;
 
-    /// Один канал на тред + фильтр `conversation_id=eq.{uuid}` на стороне Realtime (см. Supabase docs).
-    /// UUID из URL/роутера нормализуем — иначе фильтр может не совпасть с текстом uuid в WAL.
+    /// Фильтр по `conversation_id` для сообщений — в INSERT/new обычно есть вся строка.
     final convFilter = PostgresChangeFilter(
       type: PostgresChangeFilterType.eq,
       column: 'conversation_id',
@@ -1181,6 +1189,18 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     );
 
     _channel = _client.channel('chat_thread_$conversationId');
+
+    /// Важно: для **UPDATE** `chat_participants` WAL часто содержит в `new` только изменённые поля
+    /// (`last_read_*`), **без** `conversation_id`. Серверный фильтр Realtime `conversation_id=eq…`
+    /// тогда **не матчится** → событие **не доходит до клиента** (пока не сделали full reload с БД).
+    /// Поэтому подписка на участников **без** server-side filter; отсекаем чужие диалоги по строке здесь (RLS и так ограничивает строки).
+    void onParticipantsChange(PostgresChangePayload payload) {
+      if (payload.eventType != PostgresChangeEvent.update) return;
+      final merged = _mergedParticipantRealtimeRow(payload);
+      final conv = _conversationIdFromMergedRow(merged);
+      if (conv == null || conv != cid) return;
+      _onChatParticipantsRealtimeUpdate(payload);
+    }
 
     void onMessagesChange(PostgresChangePayload payload) {
       if (payload.eventType == PostgresChangeEvent.insert) {
@@ -1201,17 +1221,12 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         filter: convFilter,
         callback: onMessagesChange,
       )
-      // Собеседник вызвал mark_conversation_read — UPDATE строки участника. Слушаем `all`, внутри отфильтровываем UPDATE
-      // (на некоторых конфигурациях binding UPDATE-only расходится с сервером).
+      // Без PostgresChangeFilter — см. [onParticipantsChange].
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: 'chat_participants',
-        filter: convFilter,
-        callback: (PostgresChangePayload payload) {
-          if (payload.eventType != PostgresChangeEvent.update) return;
-          _onChatParticipantsRealtimeUpdate(payload);
-        },
+        callback: onParticipantsChange,
       )
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
