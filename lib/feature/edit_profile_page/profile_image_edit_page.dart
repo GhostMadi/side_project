@@ -7,6 +7,7 @@ import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/icons/app_icons.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 
 /// Редактор: обложка, аватар, кластер, пост — с пресетами кадра и свободной обрезкой.
 @RoutePage()
@@ -94,9 +95,7 @@ class _ProfileImageEditPageState extends State<ProfileImageEditPage> {
       case CropSuccess(:final croppedImage):
         context.router.pop<Uint8List>(croppedImage);
       case CropFailure(:final cause):
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$cause'), backgroundColor: AppColors.error));
+        AppSnackBar.show(context, message: '$cause', kind: AppSnackBarKind.error);
     }
   }
 

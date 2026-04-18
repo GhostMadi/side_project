@@ -38,13 +38,19 @@ class ProfileHeaderStatItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           value,
+          textAlign: TextAlign.center,
           style: AppTextStyle.base(18, color: AppColors.textColor, fontWeight: FontWeight.w800),
         ),
         Text(
           label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: AppTextStyle.base(12, color: AppColors.subTextColor, fontWeight: FontWeight.w500),
         ),
       ],

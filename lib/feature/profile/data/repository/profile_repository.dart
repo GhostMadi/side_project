@@ -7,6 +7,9 @@ abstract class ProfileRepository {
   /// Публичный профиль по id (совпадает с id пользователя в auth).
   Future<ProfileModel?> getById(String id);
 
+  /// Только поля для аватарки/ника в UI (одна строка, минимальный `select`).
+  Future<({String? username, String? avatarUrl})?> getMiniById(String id);
+
   /// Профиль текущего пользователя.
   Future<ProfileModel?> getCurrentUserProfile();
 
@@ -40,4 +43,8 @@ abstract class ProfileRepository {
     required String query,
     int limit = 24,
   });
+
+  /// Один запрос: подтянуть `username`/`avatar_url` для списка user id и положить в локальный мини‑кэш
+  /// (чтобы шапка поста открывалась мгновенно, как реакции с ленты).
+  Future<void> prefetchMiniProfilesForUserIds(List<String> userIds);
 }

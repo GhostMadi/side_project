@@ -53,19 +53,18 @@ class AppInformer extends StatelessWidget {
                 ),
                 if (actionLabel != null && onAction != null) ...[
                   const SizedBox(height: 8),
-                  Center(
-                    child: TextButton(
-                      onPressed: onAction,
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        foregroundColor: AppColors.primary,
-                      ),
-                      child: Text(
-                        actionLabel!,
-                        style: AppTextStyle.base(14, color: AppColors.primary, fontWeight: FontWeight.w700),
-                      ),
+                  TextButton(
+                    onPressed: onAction,
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: AppColors.primary,
+                    ),
+                    child: Text(
+                      textAlign: TextAlign.start,
+                      actionLabel!,
+                      style: AppTextStyle.base(14, color: AppColors.primary, fontWeight: FontWeight.w700),
                     ),
                   ),
                 ],

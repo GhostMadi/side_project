@@ -131,13 +131,13 @@ return error(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  initial,TResult Function()?  loading,TResult Function()?  notFound,TResult Function( PostModel post)?  loaded,TResult Function( String message)?  error,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  initial,TResult Function()?  loading,TResult Function()?  notFound,TResult Function( PostModel post,  PostReaction reaction,  String? authorUsername,  String? authorAvatarUrl,  bool isSaved)?  loaded,TResult Function( String message)?  error,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Initial() when initial != null:
 return initial();case _Loading() when loading != null:
 return loading();case _NotFound() when notFound != null:
 return notFound();case _Loaded() when loaded != null:
-return loaded(_that.post);case _Error() when error != null:
+return loaded(_that.post,_that.reaction,_that.authorUsername,_that.authorAvatarUrl,_that.isSaved);case _Error() when error != null:
 return error(_that.message);case _:
   return orElse();
 
@@ -156,13 +156,13 @@ return error(_that.message);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  initial,required TResult Function()  loading,required TResult Function()  notFound,required TResult Function( PostModel post)  loaded,required TResult Function( String message)  error,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  initial,required TResult Function()  loading,required TResult Function()  notFound,required TResult Function( PostModel post,  PostReaction reaction,  String? authorUsername,  String? authorAvatarUrl,  bool isSaved)  loaded,required TResult Function( String message)  error,}) {final _that = this;
 switch (_that) {
 case _Initial():
 return initial();case _Loading():
 return loading();case _NotFound():
 return notFound();case _Loaded():
-return loaded(_that.post);case _Error():
+return loaded(_that.post,_that.reaction,_that.authorUsername,_that.authorAvatarUrl,_that.isSaved);case _Error():
 return error(_that.message);case _:
   throw StateError('Unexpected subclass');
 
@@ -180,13 +180,13 @@ return error(_that.message);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  initial,TResult? Function()?  loading,TResult? Function()?  notFound,TResult? Function( PostModel post)?  loaded,TResult? Function( String message)?  error,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  initial,TResult? Function()?  loading,TResult? Function()?  notFound,TResult? Function( PostModel post,  PostReaction reaction,  String? authorUsername,  String? authorAvatarUrl,  bool isSaved)?  loaded,TResult? Function( String message)?  error,}) {final _that = this;
 switch (_that) {
 case _Initial() when initial != null:
 return initial();case _Loading() when loading != null:
 return loading();case _NotFound() when notFound != null:
 return notFound();case _Loaded() when loaded != null:
-return loaded(_that.post);case _Error() when error != null:
+return loaded(_that.post,_that.reaction,_that.authorUsername,_that.authorAvatarUrl,_that.isSaved);case _Error() when error != null:
 return error(_that.message);case _:
   return null;
 
@@ -295,10 +295,14 @@ String toString() {
 
 
 class _Loaded implements PostDetailState {
-  const _Loaded(this.post);
+  const _Loaded({required this.post, required this.reaction, this.authorUsername, this.authorAvatarUrl, this.isSaved = false});
   
 
  final  PostModel post;
+ final  PostReaction reaction;
+ final  String? authorUsername;
+ final  String? authorAvatarUrl;
+@JsonKey() final  bool isSaved;
 
 /// Create a copy of PostDetailState
 /// with the given fields replaced by the non-null parameter values.
@@ -310,16 +314,16 @@ _$LoadedCopyWith<_Loaded> get copyWith => __$LoadedCopyWithImpl<_Loaded>(this, _
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Loaded&&(identical(other.post, post) || other.post == post));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Loaded&&(identical(other.post, post) || other.post == post)&&(identical(other.reaction, reaction) || other.reaction == reaction)&&(identical(other.authorUsername, authorUsername) || other.authorUsername == authorUsername)&&(identical(other.authorAvatarUrl, authorAvatarUrl) || other.authorAvatarUrl == authorAvatarUrl)&&(identical(other.isSaved, isSaved) || other.isSaved == isSaved));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,post);
+int get hashCode => Object.hash(runtimeType,post,reaction,authorUsername,authorAvatarUrl,isSaved);
 
 @override
 String toString() {
-  return 'PostDetailState.loaded(post: $post)';
+  return 'PostDetailState.loaded(post: $post, reaction: $reaction, authorUsername: $authorUsername, authorAvatarUrl: $authorAvatarUrl, isSaved: $isSaved)';
 }
 
 
@@ -330,7 +334,7 @@ abstract mixin class _$LoadedCopyWith<$Res> implements $PostDetailStateCopyWith<
   factory _$LoadedCopyWith(_Loaded value, $Res Function(_Loaded) _then) = __$LoadedCopyWithImpl;
 @useResult
 $Res call({
- PostModel post
+ PostModel post, PostReaction reaction, String? authorUsername, String? authorAvatarUrl, bool isSaved
 });
 
 
@@ -347,10 +351,14 @@ class __$LoadedCopyWithImpl<$Res>
 
 /// Create a copy of PostDetailState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? post = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? post = null,Object? reaction = null,Object? authorUsername = freezed,Object? authorAvatarUrl = freezed,Object? isSaved = null,}) {
   return _then(_Loaded(
-null == post ? _self.post : post // ignore: cast_nullable_to_non_nullable
-as PostModel,
+post: null == post ? _self.post : post // ignore: cast_nullable_to_non_nullable
+as PostModel,reaction: null == reaction ? _self.reaction : reaction // ignore: cast_nullable_to_non_nullable
+as PostReaction,authorUsername: freezed == authorUsername ? _self.authorUsername : authorUsername // ignore: cast_nullable_to_non_nullable
+as String?,authorAvatarUrl: freezed == authorAvatarUrl ? _self.authorAvatarUrl : authorAvatarUrl // ignore: cast_nullable_to_non_nullable
+as String?,isSaved: null == isSaved ? _self.isSaved : isSaved // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

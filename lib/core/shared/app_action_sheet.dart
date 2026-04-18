@@ -56,11 +56,8 @@ class AppActionSheet<T> extends StatelessWidget {
         physics: const ClampingScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: items.length,
-        separatorBuilder: (_, __) => Divider(
-          height: 1,
-          thickness: 0.5,
-          color: AppColors.border.withValues(alpha: 0.75),
-        ),
+        separatorBuilder: (_, __) =>
+            Divider(height: 1, thickness: 0.5, color: AppColors.border.withValues(alpha: 0.75)),
         itemBuilder: (ctx, i) {
           final it = items[i];
           final color = it.isDestructive ? AppColors.error : AppColors.textColor;
@@ -93,11 +90,6 @@ class AppActionSheet<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!enabled) return child;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _open(context),
-      child: child,
-    );
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _open(context), child: child);
   }
 }
-

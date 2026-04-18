@@ -8,5 +8,6 @@
   "editProfileFieldDone": "Done",
   "profileTabLabel": "Profile",
   "mapTabLabel": "Map",
-  "createTabLabel": "Create"
+  "createTabLabel": "Create",
+  "chatTabLabel": "Chats"
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
 
 /// Серебристый шиммер по умолчанию; оборачивает [child] (плейсхолдеры с заливкой).
 class AppShimmer extends StatelessWidget {
@@ -28,5 +29,21 @@ class AppShimmer extends StatelessWidget {
       period: period,
       child: child,
     );
+  }
+}
+
+/// Зона под фото без иконки «картинки» по центру: только форма кадра; при [shimmer] — лёгкий шиммер (загрузка).
+class PostMediaFramePlaceholder extends StatelessWidget {
+  const PostMediaFramePlaceholder({super.key, this.shimmer = true});
+
+  final bool shimmer;
+
+  @override
+  Widget build(BuildContext context) {
+    final box = SizedBox.expand(
+      child: ColoredBox(color: AppColors.surfaceSoft),
+    );
+    if (!shimmer) return box;
+    return AppShimmer(child: box);
   }
 }

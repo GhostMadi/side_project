@@ -8,6 +8,7 @@ import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_bottom_sheet.dart';
 import 'package:side_project/core/shared/app_dialog.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/feature/edit_profile_page/profile_image_upload_flow.dart';
 import 'package:side_project/feature/profile/data/models/profile_model.dart';
 import 'package:side_project/feature/profile/presentation/cubit/profile_cubit.dart';
@@ -211,9 +212,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     if (!mounted) return;
                     setState(() => _uploading = false);
                     if (err != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(err), backgroundColor: AppColors.error),
-                      );
+                      AppSnackBar.show(context, message: err, kind: AppSnackBarKind.error);
                     }
                   },
                 ),
@@ -230,9 +229,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (!mounted) return;
     setState(() => _uploading = false);
     if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err), backgroundColor: AppColors.error),
-      );
+      AppSnackBar.show(context, message: err, kind: AppSnackBarKind.error);
     }
   }
 

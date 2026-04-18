@@ -11,13 +11,14 @@ import 'package:side_project/feature/cluster/data/repository/cluster_repository.
 import 'package:side_project/feature/cluster/presentation/cluster_list_refresh.dart';
 import 'package:side_project/feature/cluster/presentation/cubit/clusters_list_cubit.dart';
 import 'package:side_project/feature/cluster/presentation/widget/clusters_strip_shimmer.dart';
+import 'package:side_project/feature/posts/presentation/cubit/posts_list_cubit.dart';
 import 'package:side_project/feature/profile/presentation/cubit/profile_cubit.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_collection_card.dart';
 
 /// Горизонтальный список кластеров владельца из Supabase.
 ///
 /// Пустой список и состояния до успешной загрузки — [SizedBox.shrink].
-/// [leading] — например карточка локального черновика до сохранения в БД.
+/// [leading] — опционально виджет перед списком (например баннер).
 class OwnerClustersStrip extends StatefulWidget {
   const OwnerClustersStrip({
     super.key,
@@ -82,16 +83,14 @@ class _OwnerClustersStripState extends State<OwnerClustersStrip> {
     return BlocBuilder<ClustersListCubit, ClustersListState>(
       builder: (context, state) {
         return state.maybeWhen(
-          loading: () => const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: ClustersStripShimmer(),
-          ),
+          loading: () => const Padding(padding: EdgeInsets.only(bottom: 8), child: ClustersStripShimmer()),
           loaded: (items) {
             final hasLeading = widget.leading != null;
             if (!hasLeading && items.isEmpty) {
               return const SizedBox.shrink();
             }
             return _StripContent(
+              ownerId: widget.ownerId,
               clusters: items,
               leading: widget.leading,
               selectedClusterId: widget.selectedClusterId,
@@ -106,15 +105,58 @@ class _OwnerClustersStripState extends State<OwnerClustersStrip> {
 }
 
 class _StripContent extends StatelessWidget {
-  const _StripContent({required this.clusters, this.leading, this.selectedClusterId, this.onClusterTap});
+  const _StripContent({
+    required this.ownerId,
+    required this.clusters,
+    this.leading,
+    this.selectedClusterId,
+    this.onClusterTap,
+  });
 
+  static const double _kClusterCardWidth = 212;
+
+  final String ownerId;
   final List<ClusterModel> clusters;
   final Widget? leading;
   final String? selectedClusterId;
   final ValueChanged<ClusterModel>? onClusterTap;
 
+  void _applyClusterTap(BuildContext context, ClusterModel cluster) {
+    final cubit = context.read<PostsListCubit>();
+    final st = cubit.state;
+    final selected = st.maybeWhen(
+      loading: (feedClusterId, feedWithoutCluster) =>
+          !feedWithoutCluster && feedClusterId == cluster.id,
+      loaded: (_, __, ___, feedClusterId, feedWithoutCluster, ____, _____) =>
+          !feedWithoutCluster && feedClusterId == cluster.id,
+      orElse: () => false,
+    );
+    if (selected) {
+      unawaited(cubit.loadUserFeed(ownerId));
+    } else {
+      unawaited(cubit.loadUserFeedForCluster(ownerId, cluster.id));
+    }
+  }
+
+  bool _isAllPublicationsFilter(PostsListState postState) {
+    return postState.maybeWhen(
+      loading: (feedClusterId, feedWithoutCluster) => feedClusterId == null && !feedWithoutCluster,
+      loaded: (_, __, ___, feedClusterId, feedWithoutCluster, ____, _____) =>
+          feedClusterId == null && !feedWithoutCluster,
+      orElse: () => false,
+    );
+  }
+
+  /// Полная лента: посты с коллекцией и без.
+  void _applyAllPublicationsTap(BuildContext context) {
+    unawaited(context.read<PostsListCubit>().loadUserFeed(ownerId));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final leading = this.leading;
+    final showRest = clusters.isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: LayoutBuilder(
@@ -126,22 +168,55 @@ class _StripContent extends StatelessWidget {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (leading != null) ...[leading!, const SizedBox(width: 12)],
-                    for (var i = 0; i < clusters.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 12),
-                      _ClusterCard(
-                        index: leading != null ? i + 1 : i,
-                        cluster: clusters[i],
-                        isSelected: selectedClusterId != null && selectedClusterId == clusters[i].id,
-                        onTap: onClusterTap == null ? null : () => onClusterTap!(clusters[i]),
-                      ),
-                    ],
-                  ],
+                child: BlocBuilder<PostsListCubit, PostsListState>(
+                  buildWhen: (p, c) => p != c,
+                  builder: (context, postState) {
+                    final restIndex = leading != null ? 1 : 0;
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (leading != null) ...[leading, const SizedBox(width: 12)],
+                        if (showRest) ...[
+                          SizedBox(
+                            width: _kClusterCardWidth,
+                            child: ProfileCollectionCard(
+                              index: restIndex,
+                              imageUrl: '',
+                              title: 'Все публикации',
+                              collectionSubtitle: null,
+                              countLabel: '',
+                              isSelected: _isAllPublicationsFilter(postState),
+                              onTap: () => _applyAllPublicationsTap(context),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        for (var i = 0; i < clusters.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          _ClusterCard(
+                            index: restIndex + 1 + i,
+                            cluster: clusters[i],
+                            isSelected: postState.maybeWhen(
+                              loading: (feedClusterId, feedWithoutCluster) =>
+                                  !feedWithoutCluster && feedClusterId == clusters[i].id,
+                              loaded: (_, __, ___, feedClusterId, feedWithoutCluster, ____, _____) =>
+                                  !feedWithoutCluster && feedClusterId == clusters[i].id,
+                              orElse: () => false,
+                            ),
+                            onTap: () {
+                              if (onClusterTap != null) {
+                                onClusterTap!(clusters[i]);
+                              } else {
+                                _applyClusterTap(context, clusters[i]);
+                              }
+                            },
+                          ),
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -248,7 +323,11 @@ class _ClusterCard extends StatelessWidget {
                   _archiveCluster(context);
                   return;
                 }
-                AppSnackBar.show(context, message: 'Редактирование подключим следующим шагом', kind: AppSnackBarKind.info);
+                AppSnackBar.show(
+                  context,
+                  message: 'Редактирование подключим следующим шагом',
+                  kind: AppSnackBarKind.info,
+                );
               },
               child: Padding(
                 padding: const EdgeInsets.all(6),

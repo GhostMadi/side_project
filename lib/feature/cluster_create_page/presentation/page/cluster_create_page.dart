@@ -1,39 +1,40 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:side_project/core/dependencies/get_it.dart' show sl;
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/icons/app_icons.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
-import 'package:side_project/core/shared/app_button.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_text_button.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
 import 'package:side_project/core/shared/ig_edit/ig_edit_bake.dart';
 import 'package:side_project/feature/cluster/presentation/cluster_list_refresh.dart';
-import 'package:side_project/feature/cluster_create_page/cluster_cover_pick_flow.dart';
-import 'package:side_project/feature/cluster_create_page/data/cluster_preview_session.dart';
 import 'package:side_project/feature/cluster_create_page/presentation/cubit/cluster_create_cubit.dart';
-import 'package:side_project/feature/cluster_create_page/presentation/widget/cluster_cover_edit_step.dart';
+import 'package:side_project/feature/media_pick_edit/media_pick_edit.dart';
+import 'package:side_project/feature/post_create_page/presentation/page/post_create_gallery_step.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_models.dart';
+import 'package:side_project/feature/post_create_page/presentation/widget/post_create_image_edit_body.dart';
 import 'package:side_project/feature/profile/presentation/cubit/profile_cubit.dart';
 import 'package:side_project/feature/profile_page/presentation/models/profile_feed_preview.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_collection_card.dart';
 
-/// Экран создания кластера: форма → [ClusterRepository.createCluster] через [ClusterCreateCubit].
-@RoutePage()
-class ClusterCreatePage extends StatefulWidget {
-  const ClusterCreatePage({super.key});
+/// Рекомендуемые параметры обложки кластера (1 фото, 1:1, без видео) — тот же смысл, что [MediaPickEditConfig] для поста.
+const MediaPickEditConfig kClusterCreateMediaConfig = MediaPickEditConfig(
+  maxSelection: 1,
+  allowVideo: false,
+  cropPresets: [MediaAspectPreset.ratio1x1],
+);
 
-  @override
-  State<ClusterCreatePage> createState() => _ClusterCreatePageState();
-}
-
-enum _ClusterCreateStep { pick, edit, details }
+/// Превью на шаге «детали», пока название не введено.
+const String _kClusterDetailsPreviewPlaceholderTitle = 'Новая коллекция';
 
 class _BakeCoverInput {
   const _BakeCoverInput(this.bytes, this.params);
@@ -45,7 +46,22 @@ Uint8List _bakeCoverInIsolate(_BakeCoverInput input) {
   return bakePostImageEdit(input.bytes, input.params);
 }
 
+/// Экран создания кластера: шаг 1 — как у поста ([PostCreateGalleryStep]) → шаг 2 — как у поста ([PostCreateImageEditBody]) → форма.
+@RoutePage()
+class ClusterCreatePage extends StatefulWidget {
+  const ClusterCreatePage({super.key});
+
+  @override
+  State<ClusterCreatePage> createState() => _ClusterCreatePageState();
+}
+
+enum _ClusterCreateStep { pick, edit, details }
+
 class _ClusterCreatePageState extends State<ClusterCreatePage> {
+  final GlobalKey<PostCreateGalleryStepState> _galleryStepKey = GlobalKey<PostCreateGalleryStepState>();
+  final GlobalKey<PostCreateImageEditBodyState> _imageEditKey = GlobalKey<PostCreateImageEditBodyState>();
+  int _galleryEpoch = 0;
+
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
   final _subtitleCtrl = TextEditingController();
@@ -55,48 +71,29 @@ class _ClusterCreatePageState extends State<ClusterCreatePage> {
   Uint8List? _editedCoverBytes;
   Uint8List? _bakedCoverBytes;
   late final ValueNotifier<PostImageEditParams> _editParams;
+  late final ValueNotifier<PostImageEditParams> _stripDisplayParams;
+  final ValueNotifier<PostImageEditAppBarFlags> _imageEditAppBarFlags = ValueNotifier(
+    const PostImageEditAppBarFlags(),
+  );
+
+  File? _coverOriginalFile;
+  File? _coverDisplayFile;
+  String _coverAspectLabel = '1x1';
 
   late final VoidCallback _fieldsListener;
-  bool _sessionPostFrameScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _editParams = ValueNotifier<PostImageEditParams>(const PostImageEditParams());
-    final existing = ClusterPreviewSession.draftNotifier.value;
-    if (existing != null) {
-      _titleCtrl.text = existing.title;
-      _subtitleCtrl.text = existing.subtitle;
-      if (existing.coverBytes != null && existing.coverBytes!.isNotEmpty) {
-        final b = Uint8List.fromList(existing.coverBytes!);
-        _rawCoverBytes = b;
-        _editedCoverBytes = b;
-        _step = _ClusterCreateStep.details;
-      }
-    }
+    _stripDisplayParams = ValueNotifier<PostImageEditParams>(_editParams.value);
     void onFieldsChanged() {
       setState(() {});
-      _syncToSession();
     }
 
     _fieldsListener = onFieldsChanged;
     _titleCtrl.addListener(_fieldsListener);
     _subtitleCtrl.addListener(_fieldsListener);
-    _syncToSession();
-  }
-
-  void _syncToSession() {
-    if (_sessionPostFrameScheduled) return;
-    _sessionPostFrameScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sessionPostFrameScheduled = false;
-      if (!mounted) return;
-      ClusterPreviewSession.update(
-        title: _titleCtrl.text,
-        subtitle: _subtitleCtrl.text,
-        coverBytes: _editedCoverBytes ?? _rawCoverBytes,
-      );
-    });
   }
 
   @override
@@ -106,46 +103,62 @@ class _ClusterCreatePageState extends State<ClusterCreatePage> {
     _titleCtrl.dispose();
     _subtitleCtrl.dispose();
     _editParams.dispose();
+    _stripDisplayParams.dispose();
+    _imageEditAppBarFlags.dispose();
     super.dispose();
   }
 
-  Future<void> _pickRawCover() async {
-    final bytes = await pickClusterCoverRaw(context);
-    if (!mounted || bytes == null) return;
-    setState(() {
-      _rawCoverBytes = bytes;
-      _editedCoverBytes = null;
-      _step = _ClusterCreateStep.edit;
-    });
-    _syncToSession();
+  Future<void> _ensureCoverFilesForEdit() async {
+    final bytes = _editedCoverBytes ?? _rawCoverBytes;
+    if (bytes == null || bytes.isEmpty) return;
+    if (_coverOriginalFile != null && _coverDisplayFile != null) return;
+    final dir = await getTemporaryDirectory();
+    final f = File('${dir.path}/cluster_cover_restore_${DateTime.now().microsecondsSinceEpoch}.jpg');
+    await f.writeAsBytes(bytes, flush: true);
+    _coverOriginalFile = f;
+    _coverDisplayFile = f;
   }
 
-  Future<void> _editCover() async {
-    final raw = _rawCoverBytes;
-    if (raw == null || raw.isEmpty) return;
-    final out = await editClusterCover(context, raw);
-    if (!mounted || out == null) return;
-    setState(() {
-      _editedCoverBytes = out;
-      _bakedCoverBytes = null;
-    });
-    _syncToSession();
+  Future<void> _onGalleryContinue(List<PostCreateSlot> slots) async {
+    if (slots.isEmpty) {
+      return;
+    }
+    final s = slots.first;
+    if (s.isVideo) return;
+    try {
+      final bytes = await s.originalFile.readAsBytes();
+      final dir = await getTemporaryDirectory();
+      final f = File('${dir.path}/cluster_cover_${DateTime.now().microsecondsSinceEpoch}.jpg');
+      await f.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      setState(() {
+        _rawCoverBytes = Uint8List.fromList(bytes);
+        _editedCoverBytes = null;
+        _bakedCoverBytes = null;
+        _coverOriginalFile = f;
+        _coverDisplayFile = f;
+        _coverAspectLabel = '1x1';
+        _editParams.value = const PostImageEditParams();
+        _stripDisplayParams.value = const PostImageEditParams();
+        _step = _ClusterCreateStep.edit;
+      });
+    } catch (_) {}
   }
 
-  void _clearCover() {
+  Future<void> _onCoverDisplayReplaced(File newDisplay) async {
+    final b = await newDisplay.readAsBytes();
+    if (!mounted) return;
     setState(() {
-      _rawCoverBytes = null;
+      _coverDisplayFile = newDisplay;
+      _rawCoverBytes = Uint8List.fromList(b);
       _editedCoverBytes = null;
       _bakedCoverBytes = null;
-      _editParams.value = const PostImageEditParams();
-      _step = _ClusterCreateStep.pick;
     });
-    _syncToSession();
   }
 
   String get _previewTitle {
     final t = _titleCtrl.text.trim();
-    return t.isEmpty ? kClusterDraftPlaceholderTitle : t;
+    return t.isEmpty ? _kClusterDetailsPreviewPlaceholderTitle : t;
   }
 
   String? get _previewSubtitle {
@@ -169,13 +182,172 @@ class _ClusterCreatePageState extends State<ClusterCreatePage> {
       context.router.maybePop();
       return;
     }
+    if (_step == _ClusterCreateStep.edit) {
+      if (_imageEditKey.currentState?.exitCropIfActive() ?? false) {
+        return;
+      }
+    }
     setState(() {
       _step = switch (_step) {
         _ClusterCreateStep.edit => _ClusterCreateStep.pick,
         _ClusterCreateStep.details => _ClusterCreateStep.edit,
         _ClusterCreateStep.pick => _ClusterCreateStep.pick,
       };
+      if (_step == _ClusterCreateStep.pick) {
+        _galleryEpoch++;
+        _rawCoverBytes = null;
+        _editedCoverBytes = null;
+        _bakedCoverBytes = null;
+        _coverOriginalFile = null;
+        _coverDisplayFile = null;
+      }
     });
+  }
+
+  Color _clusterScaffoldBackground() {
+    return switch (_step) {
+      _ClusterCreateStep.edit => AppColors.postEditorBackground,
+      _ClusterCreateStep.details => AppColors.surfaceSoft,
+      _ClusterCreateStep.pick => AppColors.surfaceSoft,
+    };
+  }
+
+  String _clusterAppBarTitle(PostImageEditAppBarFlags? editBar) {
+    if (_step == _ClusterCreateStep.edit && (editBar?.cropSurface ?? false)) {
+      return 'Кадр';
+    }
+    return switch (_step) {
+      _ClusterCreateStep.pick => 'Новая коллекция',
+      _ClusterCreateStep.edit => 'Изменить',
+      _ClusterCreateStep.details => 'Новая коллекция',
+    };
+  }
+
+  Future<void> _continueFromEditStep() async {
+    final src = _editedCoverBytes ?? _rawCoverBytes;
+    if (src == null || src.isEmpty) return;
+    final p = _editParams.value;
+    final baked = p.isNeutral ? src : await compute(_bakeCoverInIsolate, _BakeCoverInput(src, p));
+    if (!mounted) return;
+    setState(() {
+      _bakedCoverBytes = baked;
+      _step = _ClusterCreateStep.details;
+    });
+  }
+
+  PreferredSizeWidget _buildClusterAppBar(
+    BuildContext context,
+    bool submitting, {
+    PostImageEditAppBarFlags? editBar,
+  }) {
+    final isEdit = _step == _ClusterCreateStep.edit;
+    final isDetails = _step == _ClusterCreateStep.details;
+    final isPick = _step == _ClusterCreateStep.pick;
+    final hasRaw = _rawCoverBytes != null && _rawCoverBytes!.isNotEmpty;
+    final galleryHasSelection = isPick ? (_galleryStepKey.currentState?.hasSelection ?? false) : false;
+
+    final actions = <Widget>[];
+    if (isPick && galleryHasSelection && !submitting) {
+      actions.add(
+        TextButton(
+          onPressed: () => _galleryStepKey.currentState?.continueWithSelection(),
+          child: Text(
+            'Далее',
+            style: AppTextStyle.base(16, color: AppColors.postEditorCta, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+    if (isEdit && hasRaw && !submitting) {
+      final bar = editBar;
+      final cropSurface = bar?.cropSurface ?? false;
+      if (cropSurface) {
+        final canApply = bar?.cropReady ?? false;
+        final working = bar?.cropWorking ?? false;
+        actions.add(
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: TextButton(
+              onPressed: working || !canApply ? null : () => _imageEditKey.currentState?.applyCrop(),
+              child: working
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.postEditorCta),
+                    )
+                  : Text(
+                      'Готово',
+                      style: AppTextStyle.base(
+                        16,
+                        color: AppColors.postEditorCta,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ),
+        );
+      } else {
+        actions.add(
+          TextButton(
+            onPressed: () => unawaited(_continueFromEditStep()),
+            child: Text(
+              'Далее',
+              style: AppTextStyle.base(16, color: AppColors.postEditorCta, fontWeight: FontWeight.w700),
+            ),
+          ),
+        );
+      }
+    }
+    if (isDetails) {
+      if (submitting) {
+        actions.add(
+          const Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.primary),
+            ),
+          ),
+        );
+      } else {
+        actions.add(
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: TextButton(
+              onPressed: () => _submit(context),
+              child: Text(
+                'Создать',
+                style: AppTextStyle.base(16, color: AppColors.primary, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    return AppAppBar(
+      automaticallyImplyLeading: false,
+      backgroundColor: isEdit
+          ? AppColors.postEditorBackground
+          : (isDetails || isPick)
+          ? AppColors.surfaceSoft
+          : null,
+      foregroundColor: isEdit ? AppColors.postEditorOnSurface : AppColors.textColor,
+      leading: IconButton(
+        icon: Icon(AppIcons.back.icon, color: isEdit ? AppColors.postEditorOnSurface : AppColors.textColor),
+        onPressed: submitting ? null : _goBack,
+      ),
+      title: Text(
+        _clusterAppBarTitle(editBar),
+        style: AppTextStyle.base(
+          17,
+          color: isEdit ? AppColors.postEditorOnSurface : AppColors.textColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      actions: actions.isEmpty ? null : actions,
+    );
   }
 
   @override
@@ -186,14 +358,13 @@ class _ClusterCreatePageState extends State<ClusterCreatePage> {
         listener: (context, state) {
           state.whenOrNull(
             success: (_) {
-              ClusterPreviewSession.clear();
               clusterListRefreshTick.value++;
               unawaited(sl<ProfileCubit>().refreshMyProfile());
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Кластер создан')));
+              AppSnackBar.show(context, message: 'Кластер создан', kind: AppSnackBarKind.success);
               context.router.maybePop();
             },
             error: (message) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+              AppSnackBar.show(context, message: message, kind: AppSnackBarKind.error);
               context.read<ClusterCreateCubit>().acknowledgeError();
             },
           );
@@ -205,243 +376,117 @@ class _ClusterCreatePageState extends State<ClusterCreatePage> {
           final bakedForPreview = _bakedCoverBytes?.isNotEmpty == true ? _bakedCoverBytes : coverForPreview;
           final hasCover = coverForPreview?.isNotEmpty == true;
 
-          final stepTitle = switch (_step) {
-            _ClusterCreateStep.pick => 'Выбор фото',
-            _ClusterCreateStep.edit => 'Редактирование',
-            _ClusterCreateStep.details => 'Информация',
-          };
-
-          return Scaffold(
-            backgroundColor: AppColors.pageBackground,
-            appBar: AppAppBar(
-              title: Text(
-                stepTitle,
-                style: AppTextStyle.base(17, color: AppColors.textColor, fontWeight: FontWeight.w700),
+          Widget body() {
+            return switch (_step) {
+              _ClusterCreateStep.pick => KeyedSubtree(
+                key: ValueKey(_galleryEpoch),
+                child: PostCreateGalleryStep(
+                  key: _galleryStepKey,
+                  maxSelection: 1,
+                  allowVideo: false,
+                  onContinue: _onGalleryContinue,
+                  onSelectionCountChanged: (_) => setState(() {}),
+                ),
               ),
-              automaticallyImplyLeading: false,
-              leading: IconButton(
-                onPressed: submitting ? null : _goBack,
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              ),
-            ),
-            body: switch (_step) {
-              _ClusterCreateStep.pick => _PickStep(
-                bytes: _rawCoverBytes,
-                onPick: submitting ? null : () => _pickRawCover(),
-                onClear: submitting ? null : (hasRaw ? _clearCover : null),
-                onContinue: submitting || !hasRaw
-                    ? null
-                    : () => setState(() => _step = _ClusterCreateStep.edit),
-              ),
-              _ClusterCreateStep.edit => _EditStep(
-                rawBytes: _rawCoverBytes,
-                editedBytes: _editedCoverBytes,
-                params: _editParams,
-                onCrop: submitting ? null : () => _editCover(),
-                onBakeAndContinue: submitting || !hasRaw
-                    ? null
-                    : () async {
-                        final src = _editedCoverBytes ?? _rawCoverBytes;
-                        if (src == null || src.isEmpty) return;
-                        final p = _editParams.value;
-                        // Neutral -> don't waste CPU.
-                        final baked = p.isNeutral
-                            ? src
-                            : await compute(_bakeCoverInIsolate, _BakeCoverInput(src, p));
-                        if (!mounted) return;
-                        setState(() {
-                          _bakedCoverBytes = baked;
-                          _step = _ClusterCreateStep.details;
-                        });
-                        _syncToSession();
-                      },
-              ),
+              _ClusterCreateStep.edit =>
+                _coverOriginalFile != null && _coverDisplayFile != null && hasRaw
+                    ? PostCreateImageEditBody(
+                        key: _imageEditKey,
+                        originalFile: _coverOriginalFile!,
+                        displayFile: _coverDisplayFile!,
+                        liveParams: _editParams,
+                        stripParams: _stripDisplayParams,
+                        flowConfig: kClusterCreateMediaConfig,
+                        aspectLabel: _coverAspectLabel,
+                        onAspectLabelChanged: (s) => setState(() => _coverAspectLabel = s),
+                        onDisplayFileReplaced: _onCoverDisplayReplaced,
+                        appBarFlags: _imageEditAppBarFlags,
+                      )
+                    : const SizedBox.shrink(),
               _ClusterCreateStep.details => Form(
                 key: _formKey,
-                child: Column(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(20, 8, 20, 28 + MediaQuery.paddingOf(context).bottom),
                   children: [
-                    Expanded(
-                      child: ListView(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                        children: [
-                          const _SectionLabel(text: 'Как будет в профиле'),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: ProfileCollectionCard(
-                              index: 0,
-                              imageUrl: '',
-                              memoryImageBytes: hasCover ? bakedForPreview : null,
-                              title: _previewTitle,
-                              collectionSubtitle: _previewSubtitle,
-                              countLabel: profileCollectionCountLabel(kProfileClusterDraftMockPostCount),
-                              isSelected: true,
-                              onTap: () {},
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          const _SectionLabel(text: 'Основное'),
-                          const SizedBox(height: 8),
-                          AppTextField(
-                            hintText: 'Название · title',
-                            controller: _titleCtrl,
-                            textCapitalization: TextCapitalization.sentences,
-                            readOnly: submitting,
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Укажите название';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          AppTextField(
-                            hintText: 'Подзаголовок · subtitle',
-                            controller: _subtitleCtrl,
-                            maxLines: 3,
-                            minLines: 2,
-                            readOnly: submitting,
-                            textCapitalization: TextCapitalization.sentences,
-                          ),
-                          const SizedBox(height: 16),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: AppTextButton(
-                              text: 'Изменить фото',
-                              onPressed: submitting
-                                  ? null
-                                  : () {
-                                      setState(() => _step = _ClusterCreateStep.edit);
-                                    },
-                            ),
-                          ),
-                        ],
+                    const _SectionLabel(text: 'Как будет в профиле'),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ProfileCollectionCard(
+                        index: 0,
+                        imageUrl: '',
+                        memoryImageBytes: hasCover ? bakedForPreview : null,
+                        title: _previewTitle,
+                        collectionSubtitle: _previewSubtitle,
+                        countLabel: profileCollectionCountLabel(kProfileClusterDraftMockPostCount),
+                        isSelected: true,
+                        onTap: () {},
                       ),
                     ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.paddingOf(context).bottom),
-                      child: AppButton(
-                        text: submitting ? 'Создание…' : 'Создать кластер',
-                        onPressed: submitting ? () {} : () => _submit(context),
+                    const SizedBox(height: 24),
+                    const _SectionLabel(text: 'Основное'),
+                    const SizedBox(height: 8),
+                    AppTextField(
+                      hintText: 'Название · title',
+                      controller: _titleCtrl,
+                      textCapitalization: TextCapitalization.sentences,
+                      readOnly: submitting,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Укажите название';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    AppTextField(
+                      hintText: 'Подзаголовок · subtitle',
+                      controller: _subtitleCtrl,
+                      maxLines: 3,
+                      minLines: 2,
+                      readOnly: submitting,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: AppTextButton(
+                        text: 'Изменить фото',
+                        onPressed: submitting
+                            ? null
+                            : () async {
+                                await _ensureCoverFilesForEdit();
+                                if (mounted) {
+                                  setState(() => _step = _ClusterCreateStep.edit);
+                                }
+                              },
                       ),
                     ),
                   ],
                 ),
               ),
-            },
+            };
+          }
+
+          if (_step == _ClusterCreateStep.edit) {
+            return ValueListenableBuilder<PostImageEditAppBarFlags>(
+              valueListenable: _imageEditAppBarFlags,
+              builder: (context, flags, _) {
+                return Scaffold(
+                  backgroundColor: _clusterScaffoldBackground(),
+                  appBar: _buildClusterAppBar(context, submitting, editBar: flags),
+                  body: body(),
+                );
+              },
+            );
+          }
+
+          return Scaffold(
+            backgroundColor: _clusterScaffoldBackground(),
+            appBar: _buildClusterAppBar(context, submitting, editBar: null),
+            body: body(),
           );
         },
       ),
-    );
-  }
-}
-
-class _PickStep extends StatelessWidget {
-  const _PickStep({
-    required this.bytes,
-    required this.onPick,
-    required this.onClear,
-    required this.onContinue,
-  });
-
-  final Uint8List? bytes;
-  final VoidCallback? onPick;
-  final VoidCallback? onClear;
-  final VoidCallback? onContinue;
-
-  @override
-  Widget build(BuildContext context) {
-    final has = bytes != null && bytes!.isNotEmpty;
-    final side = MediaQuery.sizeOf(context).width - 40;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: Column(
-        children: [
-          SizedBox(
-            width: side,
-            height: side,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onPick,
-                borderRadius: _clusterCoverLargePreviewRadius,
-                child: Ink(
-                  decoration: BoxDecoration(
-                    color: AppColors.inputBackground,
-                    borderRadius: _clusterCoverLargePreviewRadius,
-                    border: Border.all(color: AppColors.inputBorder),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: _clusterCoverLargePreviewRadius,
-                    child: has
-                        ? Image.memory(bytes!, fit: BoxFit.cover, gaplessPlayback: true)
-                        : SizedBox.expand(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(AppIcons.addPhotoAlternate.icon, color: AppColors.primary, size: 40),
-                                const SizedBox(height: 10),
-                                Text(
-                                  'Выбрать фото',
-                                  style: AppTextStyle.base(
-                                    16,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textColor,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Одна фотография для обложки кластера',
-                                  textAlign: TextAlign.center,
-                                  style: AppTextStyle.base(13, color: AppColors.subTextColor, height: 1.3),
-                                ),
-                              ],
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const Spacer(),
-          AppButton(text: has ? 'Далее' : 'Выбрать', onPressed: has ? onContinue : onPick),
-          if (onClear != null) ...[
-            const SizedBox(height: 10),
-            AppTextButton(text: 'Убрать фото', onPressed: onClear),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _EditStep extends StatelessWidget {
-  const _EditStep({
-    required this.rawBytes,
-    required this.editedBytes,
-    required this.params,
-    required this.onCrop,
-    required this.onBakeAndContinue,
-  });
-
-  final Uint8List? rawBytes;
-  final Uint8List? editedBytes;
-  final ValueNotifier<PostImageEditParams> params;
-  final VoidCallback? onCrop;
-  final Future<void> Function()? onBakeAndContinue;
-
-  @override
-  Widget build(BuildContext context) {
-    final Uint8List? bytes = editedBytes?.isNotEmpty == true ? editedBytes : rawBytes;
-    if (bytes == null || bytes.isEmpty) return const SizedBox.shrink();
-
-    return ClusterCoverEditStep(
-      bytes: bytes,
-      params: params,
-      onCrop: onCrop,
-      onContinue: onBakeAndContinue,
-      borderRadius: _clusterCoverLargePreviewRadius,
     );
   }
 }
@@ -464,10 +509,3 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
-
-const BorderRadius _clusterCoverLargePreviewRadius = BorderRadius.only(
-  topLeft: Radius.circular(14),
-  topRight: Radius.circular(10),
-  bottomRight: Radius.circular(14),
-  bottomLeft: Radius.circular(10),
-);

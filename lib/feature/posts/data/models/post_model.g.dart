@@ -18,6 +18,7 @@ _PostModel _$PostModelFromJson(Map<String, dynamic> json) => _PostModel(
       ? null
       : DateTime.parse(json['deleted_at'] as String),
   likesCount: (json['likes_count'] as num).toInt(),
+  dislikesCount: (json['dislikes_count'] as num).toInt(),
   commentsCount: (json['comments_count'] as num).toInt(),
   savesCount: (json['saves_count'] as num).toInt(),
   sendsCount: (json['sends_count'] as num).toInt(),
@@ -42,6 +43,7 @@ Map<String, dynamic> _$PostModelToJson(_PostModel instance) =>
       'is_archived': instance.isArchived,
       'deleted_at': instance.deletedAt?.toIso8601String(),
       'likes_count': instance.likesCount,
+      'dislikes_count': instance.dislikesCount,
       'comments_count': instance.commentsCount,
       'saves_count': instance.savesCount,
       'sends_count': instance.sendsCount,

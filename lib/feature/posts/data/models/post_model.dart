@@ -16,6 +16,7 @@ abstract class PostModel with _$PostModel {
     @JsonKey(name: 'is_archived') required bool isArchived,
     @JsonKey(name: 'deleted_at') DateTime? deletedAt,
     @JsonKey(name: 'likes_count') required int likesCount,
+    @JsonKey(name: 'dislikes_count') required int dislikesCount,
     @JsonKey(name: 'comments_count') required int commentsCount,
     @JsonKey(name: 'saves_count') required int savesCount,
     @JsonKey(name: 'sends_count') required int sendsCount,
@@ -27,4 +28,3 @@ abstract class PostModel with _$PostModel {
 
   factory PostModel.fromJson(Map<String, dynamic> json) => _$PostModelFromJson(json);
 }
-

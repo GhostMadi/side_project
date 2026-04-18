@@ -25,4 +25,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get createTabLabel => 'Create';
+
+  @override
+  String get chatTabLabel => 'Chats';
 }

@@ -25,4 +25,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get createTabLabel => 'Создать';
+
+  @override
+  String get chatTabLabel => 'Чаты';
 }

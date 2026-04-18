@@ -9,6 +9,7 @@ class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool automaticallyImplyLeading;
   final List<Widget>? actions;
   final Color? backgroundColor;
+
   /// Цвет иконок и текста по умолчанию в AppBar (кнопка «Назад» и т.п.).
   final Color? foregroundColor;
   final PreferredSizeWidget? bottom;

@@ -10,6 +10,7 @@ import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_button.dart';
 import 'package:side_project/core/shared/app_text_button.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/feature/login_page/presentation/cubit/auth_cubit.dart';
 import 'package:side_project/feature/login_page/presentation/widget/login_google_sign_in_button.dart';
 
@@ -61,9 +62,7 @@ class _LoginPageState extends State<LoginPage> {
           authenticated: (_) =>
               context.router.replaceAll([const ApplicationRoute()]),
           error: (message) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(message)));
+            AppSnackBar.show(context, message: message, kind: AppSnackBarKind.error);
           },
         );
       },

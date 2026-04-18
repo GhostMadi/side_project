@@ -17,6 +17,8 @@ enum AppIcons {
   theme(iconAndroid: Icons.wb_sunny_outlined, iconIos: CupertinoIcons.sun_max),
   check(iconAndroid: Icons.check, iconIos: CupertinoIcons.check_mark),
   photo(iconAndroid: Icons.photo, iconIos: CupertinoIcons.photo),
+  chat(iconAndroid: Icons.chat_bubble_outline_rounded, iconIos: CupertinoIcons.chat_bubble_2),
+
   /// Плейсхолдер «добавить фото» (обложка и т.п.).
   addPhotoAlternate(
     iconAndroid: Icons.add_photo_alternate_outlined,
@@ -26,6 +28,12 @@ enum AppIcons {
   add(iconAndroid: Icons.add, iconIos: CupertinoIcons.add),
   delete(iconAndroid: Icons.delete_outline_outlined, iconIos: CupertinoIcons.delete),
   search(iconAndroid: Icons.search, iconIos: CupertinoIcons.search),
+  more(iconAndroid: Icons.more_horiz_rounded, iconIos: CupertinoIcons.ellipsis),
+  like(iconAndroid: Icons.favorite_border_rounded, iconIos: CupertinoIcons.heart),
+  dislike(iconAndroid: Icons.thumb_down_alt_outlined, iconIos: CupertinoIcons.hand_thumbsdown),
+  comment(iconAndroid: CupertinoIcons.chat_bubble_2, iconIos: CupertinoIcons.chat_bubble_2),
+  send(iconAndroid: Icons.send_rounded, iconIos: CupertinoIcons.paperplane),
+  bookmark(iconAndroid: Icons.bookmark_border_rounded, iconIos: CupertinoIcons.bookmark),
   visibility(iconAndroid: Icons.visibility_outlined, iconIos: CupertinoIcons.eye),
   visibilityOff(iconAndroid: Icons.visibility_off_outlined, iconIos: CupertinoIcons.eye_slash),
   arrowDown(iconAndroid: Icons.keyboard_arrow_down_rounded, iconIos: Icons.keyboard_arrow_down_rounded),

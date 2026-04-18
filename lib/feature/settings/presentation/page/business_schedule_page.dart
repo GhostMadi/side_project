@@ -6,6 +6,7 @@ import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_button.dart';
 import 'package:side_project/core/shared/app_outlined_button.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 
 /// Настройка услуг и графика для бизнес-аккаунта (запись клиентов).
 /// Данные пока только локально на экране; позже — API / репозиторий.
@@ -200,14 +201,12 @@ class _BusinessSchedulePageState extends State<BusinessSchedulePage> {
               text: 'Сохранить личные настройки',
               onPressed: () async {
                 FocusScope.of(context).unfocus();
-                final messenger = ScaffoldMessenger.maybeOf(context);
-                await context.router.maybePop();
-                messenger?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Личные настройки сохранены (демо — подключите бэкенд)'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
+                AppSnackBar.show(
+                  context,
+                  message: 'Личные настройки сохранены (демо — подключите бэкенд)',
+                  kind: AppSnackBarKind.success,
                 );
+                await context.router.maybePop();
               },
             ),
           ],

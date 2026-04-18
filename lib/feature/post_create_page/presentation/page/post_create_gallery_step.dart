@@ -30,11 +30,14 @@ class PostCreateGalleryStep extends StatefulWidget {
   const PostCreateGalleryStep({
     super.key,
     this.maxSelection = 10,
+    this.allowVideo = true,
     required this.onContinue,
     this.onSelectionCountChanged,
   });
 
   final int maxSelection;
+  /// Если `false`, в сетке и выборе участвуют только фото.
+  final bool allowVideo;
   final void Function(List<PostCreateSlot> slots) onContinue;
   final ValueChanged<int>? onSelectionCountChanged;
 
@@ -65,10 +68,27 @@ class PostCreateGalleryStepState extends State<PostCreateGalleryStep> {
   /// Порядок выбора как в Instagram.
   final List<AssetEntity> _selected = [];
 
+  /// Есть ли выбранные материалы (для кнопки «Далее» в AppBar).
+  bool get hasSelection => _selected.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
+    if (!widget.allowVideo) {
+      _mediaFilter = _GalleryMediaFilter.photos;
+    }
     _bootstrap();
+  }
+
+  List<_GalleryMediaFilter> get _visibleMediaFilters {
+    if (widget.allowVideo) {
+      return _GalleryMediaFilter.values.toList(growable: false);
+    }
+    return [
+      _GalleryMediaFilter.all,
+      _GalleryMediaFilter.photos,
+      _GalleryMediaFilter.favorites,
+    ];
   }
 
   @override
@@ -145,7 +165,7 @@ class PostCreateGalleryStepState extends State<PostCreateGalleryStep> {
       case _GalleryMediaFilter.all:
         final paths = await PhotoManager.getAssetPathList(
           onlyAll: true,
-          type: RequestType.common,
+          type: widget.allowVideo ? RequestType.common : RequestType.image,
         );
         return paths.isEmpty ? null : paths.first;
       case _GalleryMediaFilter.photos:
@@ -271,8 +291,10 @@ class PostCreateGalleryStepState extends State<PostCreateGalleryStep> {
   }
 
   void _toggle(AssetEntity e) {
+    if (!widget.allowVideo && e.type == AssetType.video) {
+      return;
+    }
     final i = _selected.indexWhere((x) => x.id == e.id);
-    final willAdd = i < 0 && _selected.length < widget.maxSelection;
     setState(() {
       if (i >= 0) {
         _selected.removeAt(i);
@@ -281,7 +303,12 @@ class PostCreateGalleryStepState extends State<PostCreateGalleryStep> {
         } else if (_previewPageIndex >= _selected.length) {
           _previewPageIndex = _selected.length - 1;
         }
-      } else if (willAdd) {
+      } else if (_selected.length < widget.maxSelection) {
+        _selected.add(e);
+        _previewPageIndex = _selected.length - 1;
+      } else {
+        // Лимит уже набран: новый тап заменяет самый ранний выбор (для max=1 — просто смена фото).
+        _selected.removeAt(0);
         _selected.add(e);
         _previewPageIndex = _selected.length - 1;
       }
@@ -723,10 +750,10 @@ class PostCreateGalleryStepState extends State<PostCreateGalleryStep> {
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-          itemCount: _GalleryMediaFilter.values.length,
+          itemCount: _visibleMediaFilters.length,
           separatorBuilder: (_, __) => const SizedBox(width: 8),
           itemBuilder: (context, i) {
-            final f = _GalleryMediaFilter.values[i];
+            final f = _visibleMediaFilters[i];
             final sel = f == _mediaFilter;
             return Material(
               color: Colors.transparent,

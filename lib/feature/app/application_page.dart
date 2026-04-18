@@ -10,7 +10,7 @@ class ApplicationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AutoTabsRouter(
-      routes: const [MapRoute(), ProfileRoute()],
+      routes: const [MapRoute(), ChatListRoute(), ProfileRoute()],
       builder: (context, child) {
         return Scaffold(
           extendBody: true,

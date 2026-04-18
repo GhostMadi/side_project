@@ -2,6 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:side_project/core/dependencies/get_it.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
+import 'package:side_project/feature/login_page/data/repository/auth_repository.dart';
 import 'package:side_project/feature/login_page/presentation/cubit/auth_cubit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -26,6 +27,8 @@ class _SessionGatePageState extends State<SessionGatePage> {
 
     final session = Supabase.instance.client.auth.currentSession;
     if (session != null) {
+      await sl<AuthRepository>().wakeUpIfNeeded();
+      if (!mounted) return;
       sl<AuthCubit>().checkAuthStatus();
       if (!mounted) return;
       context.router.replace(const ApplicationRoute());
@@ -38,8 +41,6 @@ class _SessionGatePageState extends State<SessionGatePage> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

@@ -19,6 +19,7 @@ class AppRouter extends RootStackRouter {
       page: ApplicationRoute.page,
       children: [
         AutoRoute(page: MapRoute.page, initial: true),
+        AutoRoute(page: ChatListRoute.page),
         AutoRoute(page: ProfileRoute.page),
       ],
     ),
@@ -30,9 +31,17 @@ class AppRouter extends RootStackRouter {
     AutoRoute(page: EditProfileFieldRoute.page),
     AutoRoute(page: EditProfileSelectFieldRoute.page),
     AutoRoute(page: SettingsRoute.page),
+    AutoRoute(page: AccountRoute.page),
+    AutoRoute(page: SavedRoute.page),
     AutoRoute(page: ArchivedRoute.page),
     AutoRoute(page: MyAppointmentsRoute.page),
     AutoRoute(page: OrganizerProfileRoute.page),
+    AutoRoute(page: FollowListsRoute.page),
+    AutoRoute(page: PeopleSearchRoute.page),
+    AutoRoute(page: GuestProfileRoute.page),
+    AutoRoute(page: ProfileForGuestRoute.page),
+    AutoRoute(page: ChatThreadRoute.page),
+    AutoRoute(page: ChatSearchRoute.page),
   ];
 }
 

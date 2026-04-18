@@ -62,23 +62,24 @@ class _AppBottomBarState extends State<AppBottomBar> with SingleTickerProviderSt
         );
       },
       child: Container(
-        height: 85,
-        margin: EdgeInsets.symmetric(horizontal: 80),
+        height: 64,
+        margin: const EdgeInsets.symmetric(horizontal: 104),
         decoration: BoxDecoration(
           color: AppColors.bottomBarColor.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(40),
+          borderRadius: BorderRadius.circular(32),
           border: Border.all(color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.2), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 25,
-              offset: const Offset(0, 10),
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final segmentWidth = constraints.maxWidth / 2;
+            const tabCount = 3;
+            final segmentWidth = constraints.maxWidth / tabCount;
             return Stack(
               children: [
                 AnimatedPositioned(
@@ -91,7 +92,7 @@ class _AppBottomBarState extends State<AppBottomBar> with SingleTickerProviderSt
                   child: Center(
                     child: Container(
                       width: segmentWidth * 0.85,
-                      height: 70,
+                      height: 52,
                       decoration: BoxDecoration(
                         color: AppColors.bottomBarSegment,
                         borderRadius: BorderRadius.circular(100),
@@ -100,7 +101,7 @@ class _AppBottomBarState extends State<AppBottomBar> with SingleTickerProviderSt
                   ),
                 ),
                 Row(
-                  children: List.generate(2, (index) {
+                  children: List.generate(tabCount, (index) {
                     return _BottomItem(
                       index: index,
                       icon: _getIconForIndex(index),
@@ -124,13 +125,19 @@ class _AppBottomBarState extends State<AppBottomBar> with SingleTickerProviderSt
   }
 
   IconData _getIconForIndex(int index) {
-    if (index == 0) return AppIcons.map.icon;
-    return AppIcons.user.icon;
+    return switch (index) {
+      0 => AppIcons.map.icon,
+      1 => AppIcons.chat.icon,
+      _ => AppIcons.user.icon,
+    };
   }
 
   String _getLabelForIndex(int index, AppLocalizations l10n) {
-    if (index == 0) return l10n.mapTabLabel;
-    return l10n.profileTabLabel;
+    return switch (index) {
+      0 => l10n.mapTabLabel,
+      1 => l10n.chatTabLabel,
+      _ => l10n.profileTabLabel,
+    };
   }
 }
 
@@ -214,7 +221,7 @@ class _BottomItemState extends State<_BottomItem> with SingleTickerProviderState
                 child: Icon(
                   widget.icon,
                   key: ValueKey<bool>(widget.isSelected),
-                  size: widget.isSelected ? 30 : 26,
+                  size: widget.isSelected ? 26 : 22,
                   color: widget.isSelected ? AppColors.bottomBarActiveIcon : AppColors.bottomBarInactiveIcon,
                   shadows: widget.isSelected
                       ? [Shadow(color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.6), blurRadius: 10)]
@@ -224,15 +231,15 @@ class _BottomItemState extends State<_BottomItem> with SingleTickerProviderState
               if (widget.isSelected)
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  margin: EdgeInsets.only(top: 2),
+                  margin: const EdgeInsets.only(top: 2),
                   child: Text(
                     widget.label,
                     style: TextStyle(
                       color: AppColors.bottomBarActiveIcon,
                       fontFamily: 'Manrope',
-                      fontSize: 12,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
+                      letterSpacing: 0.9,
                       shadows: [
                         Shadow(color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.5), blurRadius: 5),
                       ],

@@ -25,11 +25,16 @@ class ProfileHeader extends StatelessWidget {
     this.statFollowers = '0',
     this.statFollowing = '0',
     this.statThird = '0',
-    this.statThirdLabel = 'Коллекции',
+    this.statThirdLabel = 'Публикации',
+    this.statFourth = '0',
+    this.statFourthLabel = 'Коллекции',
     this.onEditProfile,
     this.onMessage,
     this.onCreateContent,
     this.informer,
+    this.onFollowersTap,
+    this.onFollowingTap,
+    this.actionsRow,
   });
 
   final bool isLoading;
@@ -44,10 +49,15 @@ class ProfileHeader extends StatelessWidget {
   final String statFollowing;
   final String statThird;
   final String statThirdLabel;
+  final String statFourth;
+  final String statFourthLabel;
   final VoidCallback? onEditProfile;
   final VoidCallback? onMessage;
   final ValueChanged<ProfileCreateContentKind>? onCreateContent;
   final Widget? informer;
+  final VoidCallback? onFollowersTap;
+  final VoidCallback? onFollowingTap;
+  final Widget? actionsRow;
 
   const ProfileHeader.loading({super.key})
     : isLoading = true,
@@ -61,11 +71,16 @@ class ProfileHeader extends StatelessWidget {
       statFollowers = '0',
       statFollowing = '0',
       statThird = '0',
-      statThirdLabel = 'Коллекции',
+      statThirdLabel = 'Публикации',
+      statFourth = '0',
+      statFourthLabel = 'Коллекции',
       onEditProfile = null,
       onMessage = null,
       onCreateContent = null,
-      informer = null;
+      informer = null,
+      onFollowersTap = null,
+      onFollowingTap = null,
+      actionsRow = null;
 
   @override
   Widget build(BuildContext context) {
@@ -85,11 +100,21 @@ class ProfileHeader extends StatelessWidget {
                   ProfileHeaderAvatar(imageUrl: avatarImageUrl),
                   Expanded(
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        ProfileHeaderStatItem(value: statFollowers, label: 'Подписчики'),
-                        ProfileHeaderStatItem(value: statFollowing, label: 'Подписки'),
-                        ProfileHeaderStatItem(value: statThird, label: statThirdLabel),
+                        Expanded(
+                          child: _tappableStat(
+                            onTap: onFollowersTap,
+                            child: ProfileHeaderStatItem(value: statFollowers, label: 'Подписчики'),
+                          ),
+                        ),
+                        Expanded(
+                          child: _tappableStat(
+                            onTap: onFollowingTap,
+                            child: ProfileHeaderStatItem(value: statFollowing, label: 'Подписки'),
+                          ),
+                        ),
+                        Expanded(child: ProfileHeaderStatItem(value: statThird, label: statThirdLabel)),
+                        Expanded(child: ProfileHeaderStatItem(value: statFourth, label: statFourthLabel)),
                       ],
                     ),
                   ),
@@ -107,15 +132,26 @@ class ProfileHeader extends StatelessWidget {
               ],
               if (informer != null) ...[const SizedBox(height: 16), informer!],
               const SizedBox(height: 16),
-              ProfileHeaderActionRow(
-                onEditProfile: onEditProfile ?? () => context.router.root.push(const EditProfileRoute()),
-                onMessage: onMessage,
-                onCreateContent: onCreateContent,
-              ),
+              actionsRow ??
+                  ProfileHeaderActionRow(
+                    onEditProfile: onEditProfile ?? () => context.router.root.push(const EditProfileRoute()),
+                    onMessage: onMessage,
+                    onCreateContent: onCreateContent,
+                  ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  static Widget _tappableStat({required VoidCallback? onTap, required Widget child}) {
+    if (onTap == null) return child;
+    // Нам нужен tap, но без визуального "splash/highlight" эффекта.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: child,
     );
   }
 }

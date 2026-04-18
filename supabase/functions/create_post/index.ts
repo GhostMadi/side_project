@@ -5,7 +5,8 @@
 ///   subtitle?: string,
 ///   description?: string,
 ///   cluster_id?: string | null,
-///   media: Array<{ type: "image"|"video", mime: string, ext: string, base64: string }>
+///   aspect?: "9x16"|"1x1"|"3x4"|"16x9",
+///   media: Array<{ type: "image"|"video", mime: string, ext: string, base64: string, aspect?: "9x16"|"1x1"|"3x4"|"16x9" }>
 /// }
 ///
 /// Flow:
@@ -67,6 +68,16 @@ Deno.serve(async (req) => {
       (body as any).cluster_id === null || typeof (body as any).cluster_id === "string"
         ? (body as any).cluster_id
         : undefined;
+    const aspect = typeof (body as any).aspect === "string" ? (body as any).aspect : null;
+    if (
+      aspect !== null &&
+      aspect !== "9x16" &&
+      aspect !== "1x1" &&
+      aspect !== "3x4" &&
+      aspect !== "16x9"
+    ) {
+      return badRequest("aspect invalid");
+    }
 
     const media = Array.isArray((body as any).media) ? (body as any).media : null;
     if (!media || media.length === 0) return badRequest("media[] is required");
@@ -101,6 +112,19 @@ Deno.serve(async (req) => {
       const extRaw = String(m.ext ?? "").trim().toLowerCase();
       const ext = extRaw.replace(/[^a-z0-9]/g, "");
       const base64 = String(m.base64 ?? "");
+      const itemAspect = typeof m.aspect === "string" ? String(m.aspect).trim() : null;
+      const effectiveAspect = itemAspect || aspect;
+
+      if (
+        itemAspect !== null &&
+        itemAspect !== "" &&
+        itemAspect !== "9x16" &&
+        itemAspect !== "1x1" &&
+        itemAspect !== "3x4" &&
+        itemAspect !== "16x9"
+      ) {
+        return badRequest(`media[${i}].aspect invalid`);
+      }
 
       if (type !== "image" && type !== "video") return badRequest(`media[${i}].type invalid`);
       if (!mime) return badRequest(`media[${i}].mime required`);
@@ -108,7 +132,8 @@ Deno.serve(async (req) => {
       if (!base64) return badRequest(`media[${i}].base64 required`);
 
       const mediaId = crypto.randomUUID();
-      const path = `posts/${postId}/${mediaId}.${ext}`;
+      const suffix = effectiveAspect ? `__ar-${effectiveAspect}` : "";
+      const path = `posts/${postId}/${mediaId}${suffix}.${ext}`;
       const bytes = toBytes(base64);
 
       const { error: upErr } = await supabase.storage

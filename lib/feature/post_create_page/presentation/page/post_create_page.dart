@@ -15,22 +15,23 @@ import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/icons/app_icons.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
-import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_ig_adjust_panel.dart';
 import 'package:side_project/core/shared/app_single_select.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
 import 'package:side_project/core/shared/ig_edit/ig_edit_bake.dart';
+import 'package:side_project/feature/media_pick_edit/media_pick_edit.dart';
 import 'package:side_project/feature/post_create_page/data/models/post_create_draft.dart';
 import 'package:side_project/feature/post_create_page/data/models/post_create_media_item.dart';
+import 'package:side_project/feature/post_create_page/presentation/cubit/post_create_cubit.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_gallery_step.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_models.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_video_preview.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_edit_gpu_preview.dart';
-import 'package:side_project/feature/profile/data/models/profile_search_hit.dart';
-import 'package:side_project/feature/profile/presentation/widget/profile_people_search_sheet.dart';
-import 'package:side_project/feature/post_create_page/presentation/cubit/post_create_cubit.dart';
 import 'package:side_project/feature/post_create_page/presentation/widget/post_reorder_bottom_sheet.dart';
 import 'package:side_project/feature/post_create_page/presentation/widget/post_reorder_card.dart';
+import 'package:side_project/feature/profile/data/models/profile_search_hit.dart';
+import 'package:side_project/feature/profile/presentation/widget/profile_people_search_sheet.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const int _kCropEditorMaxSide = 2048;
@@ -123,9 +124,18 @@ String? _nullableTrimField(String value) {
 }
 
 /// Галерея → редактирование → детали публикации.
+///
+/// Для других сценариев: [mediaConfig] (лимит фото, пресеты кадра, видео),
+/// [customThirdStep] — свой UI вместо стандартного экрана публикации (получает [MediaPickEditOutcome]).
 @RoutePage()
 class PostCreatePage extends StatelessWidget {
-  const PostCreatePage({super.key});
+  const PostCreatePage({super.key, this.mediaConfig, this.customThirdStep});
+
+  /// Если null — [MediaPickEditConfig.postDefault].
+  final MediaPickEditConfig? mediaConfig;
+
+  /// Не сериализуется в auto_route; только при открытии через `Navigator` из кода.
+  final Widget Function(BuildContext context, MediaPickEditOutcome outcome)? customThirdStep;
 
   @override
   Widget build(BuildContext context) {
@@ -138,13 +148,16 @@ class PostCreatePage extends StatelessWidget {
         }
         return cubit;
       },
-      child: const _PostCreateFlow(),
+      child: _PostCreateFlow(mediaConfig: mediaConfig, customThirdStep: customThirdStep),
     );
   }
 }
 
 class _PostCreateFlow extends StatefulWidget {
-  const _PostCreateFlow();
+  const _PostCreateFlow({this.mediaConfig, this.customThirdStep});
+
+  final MediaPickEditConfig? mediaConfig;
+  final Widget Function(BuildContext context, MediaPickEditOutcome outcome)? customThirdStep;
 
   @override
   State<_PostCreateFlow> createState() => _PostCreateFlowState();
@@ -167,28 +180,14 @@ enum _EditAdjustTool {
 
 const String _kClusterNone = '';
 
-/// Готовые соотношения для кадра (только пресеты, без свободной рамки).
-enum _PostCropAspectPreset { square, story, feed, portrait, landscape }
-
-extension _PostCropAspectPresetX on _PostCropAspectPreset {
-  String get label => switch (this) {
-    _PostCropAspectPreset.square => '1:1',
-    _PostCropAspectPreset.story => '9:16',
-    _PostCropAspectPreset.feed => '4:5',
-    _PostCropAspectPreset.portrait => '3:4',
-    _PostCropAspectPreset.landscape => '4:3',
-  };
-
-  double get aspectRatio => switch (this) {
-    _PostCropAspectPreset.square => 1.0,
-    _PostCropAspectPreset.story => 9 / 16,
-    _PostCropAspectPreset.feed => 4 / 5,
-    _PostCropAspectPreset.portrait => 3 / 4,
-    _PostCropAspectPreset.landscape => 4 / 3,
-  };
-}
-
 class _PostCreateFlowState extends State<_PostCreateFlow> {
+  MediaPickEditConfig get _flowConfig => widget.mediaConfig ?? MediaPickEditConfig.postDefault;
+
+  MediaAspectPreset get _defaultCropPreset {
+    final r = _flowConfig.resolvedCropPresets;
+    return r.contains(MediaAspectPreset.ratio1x1) ? MediaAspectPreset.ratio1x1 : r.first;
+  }
+
   final GlobalKey<PostCreateGalleryStepState> _galleryStepKey = GlobalKey<PostCreateGalleryStepState>();
 
   final _formKey = GlobalKey<FormState>();
@@ -211,7 +210,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
   CropController _cropController = CropController();
   bool _cropEditorReady = false;
   bool _cropWorking = false;
-  _PostCropAspectPreset _cropAspectPreset = _PostCropAspectPreset.square;
+  MediaAspectPreset _cropAspectPreset = MediaAspectPreset.ratio1x1;
 
   List<Uint8List?> _bakedForDetails = [];
 
@@ -293,6 +292,14 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         }
       });
     }
+  }
+
+  MediaPickEditOutcome _mediaOutcome() {
+    return MediaPickEditOutcome(
+      slots: List<PostCreateSlot>.from(_slots),
+      editParams: List<PostImageEditParams>.from(_params),
+      bakedImageBytes: List<Uint8List?>.from(_bakedForDetails),
+    );
   }
 
   Future<void> _goToDetails() async {
@@ -451,10 +458,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
             thumbnail: thumb,
             dragHandle: ReorderableDragStartListener(
               index: index,
-              child: const Padding(
-                padding: EdgeInsets.all(10),
-                child: Icon(Icons.drag_handle_rounded),
-              ),
+              child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.drag_handle_rounded)),
             ),
           ),
         );
@@ -469,6 +473,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
     final out = <PostCreateMediaItem>[];
     for (var i = 0; i < _slots.length; i++) {
       final s = _slots[i];
+      final aspect = s.aspect.trim().isEmpty ? null : s.aspect.trim();
       if (s.isVideo) {
         final bytes = await s.displayFile.readAsBytes();
         final path = s.displayFile.path;
@@ -478,13 +483,13 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
           'webm' => 'video/webm',
           _ => 'video/mp4',
         };
-        out.add(PostCreateMediaItem.video(bytes: bytes, mime: mime, ext: ext));
+        out.add(PostCreateMediaItem.video(bytes: bytes, mime: mime, ext: ext, aspect: aspect));
       } else {
         final baked = _bakedForDetails[i];
         if (baked == null) {
           throw StateError('Изображение не обработано');
         }
-        out.add(PostCreateMediaItem.image(bytes: baked));
+        out.add(PostCreateMediaItem.image(bytes: baked, aspect: aspect));
       }
     }
     return out;
@@ -507,29 +512,19 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         return;
       }
       if (res != null) {
-        AppSnackBar.show(
-          context,
-          message: 'Успешно создалось',
-          kind: AppSnackBarKind.success,
-        );
+        AppSnackBar.show(context, message: 'Успешно создалось', kind: AppSnackBarKind.success);
         context.router.maybePop();
       } else {
-        final err = cubit.state.maybeWhen(
-          ready: (_, __, ___, msg) => msg,
-          orElse: () => null,
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(err ?? 'Не удалось создать пост'),
-            backgroundColor: AppColors.error,
-          ),
+        final err = cubit.state.maybeWhen(ready: (_, __, ___, msg) => msg, orElse: () => null);
+        AppSnackBar.show(
+          context,
+          message: err ?? 'Не удалось создать пост',
+          kind: AppSnackBarKind.error,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: AppColors.error),
-        );
+        AppSnackBar.show(context, message: '$e', kind: AppSnackBarKind.error);
       }
     }
   }
@@ -539,14 +534,8 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
       return;
     }
     final self = Supabase.instance.client.auth.currentUser?.id;
-    final excluded = <String>{
-      if (self != null) self,
-      ..._taggedPeople.map((e) => e.id),
-    };
-    final hit = await ProfilePeopleSearchSheet.show(
-      context,
-      excludeProfileIds: excluded,
-    );
+    final excluded = <String>{if (self != null) self, ..._taggedPeople.map((e) => e.id)};
+    final hit = await ProfilePeopleSearchSheet.show(context, excludeProfileIds: excluded);
     if (hit != null && mounted) {
       setState(() {
         if (!_taggedPeople.any((e) => e.id == hit.id)) {
@@ -570,7 +559,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
     _cropImageBytes = null;
     _cropEditorReady = false;
     _cropWorking = false;
-    _cropAspectPreset = _PostCropAspectPreset.square;
+    _cropAspectPreset = _defaultCropPreset;
     _cropController = CropController();
   }
 
@@ -597,11 +586,10 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
       }
       if (normalized == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Не удалось открыть фото для обрезки. Попробуйте другое изображение.'),
-              backgroundColor: AppColors.error,
-            ),
+          AppSnackBar.show(
+            context,
+            message: 'Не удалось открыть фото для обрезки. Попробуйте другое изображение.',
+            kind: AppSnackBarKind.error,
           );
           setState(() {
             _activeAdjust = null;
@@ -626,12 +614,17 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
     }
   }
 
-  void _setCropAspectPreset(_PostCropAspectPreset mode) {
+  void _setCropAspectPreset(MediaAspectPreset mode) {
     if (_cropAspectPreset == mode) {
       return;
     }
     setState(() {
       _cropAspectPreset = mode;
+      // Apply only to current slot (each media can have its own aspect).
+      final i = _editIndex;
+      if (i >= 0 && i < _slots.length) {
+        _slots[i] = _slots[i].copyWithAspect(mode.fileAspect);
+      }
       _cropController = CropController();
       _cropEditorReady = false;
     });
@@ -663,16 +656,16 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
           _resetEditZoom();
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Не удалось сохранить обрезку: $e'), backgroundColor: AppColors.error),
+            AppSnackBar.show(
+              context,
+              message: 'Не удалось сохранить обрезку: $e',
+              kind: AppSnackBarKind.error,
             );
           }
         }
       case CropFailure(:final cause):
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('$cause'), backgroundColor: AppColors.error));
+          AppSnackBar.show(context, message: '$cause', kind: AppSnackBarKind.error);
         }
     }
   }
@@ -715,14 +708,23 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         );
       },
       child: Scaffold(
-          backgroundColor: _postCreateScaffoldBackground(),
-          appBar: _buildPostCreateAppBar(),
-          body: switch (_step) {
-            _PostStep.gallery => PostCreateGalleryStep(key: _galleryStepKey, onContinue: _onGalleryContinue),
-            _PostStep.edit => _buildEditBody(),
-            _PostStep.details => _buildDetailsBody(),
-          },
-        ),
+        backgroundColor: _postCreateScaffoldBackground(),
+        appBar: _buildPostCreateAppBar(),
+        body: switch (_step) {
+          _PostStep.gallery => PostCreateGalleryStep(
+            key: _galleryStepKey,
+            maxSelection: _flowConfig.maxSelection,
+            allowVideo: _flowConfig.allowVideo,
+            onContinue: _onGalleryContinue,
+            onSelectionCountChanged: (_) => setState(() {}),
+          ),
+          _PostStep.edit => _buildEditBody(),
+          _PostStep.details =>
+            widget.customThirdStep != null
+                ? widget.customThirdStep!(context, _mediaOutcome())
+                : _buildDetailsBody(),
+        },
+      ),
     );
   }
 
@@ -732,15 +734,18 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
     final isGallery = _step == _PostStep.gallery;
     final actions = <Widget>[];
     if (_step == _PostStep.gallery) {
-      actions.add(
-        TextButton(
-          onPressed: () => _galleryStepKey.currentState?.continueWithSelection(),
-          child: Text(
-            'Далее',
-            style: AppTextStyle.base(16, color: AppColors.postEditorCta, fontWeight: FontWeight.w700),
+      final galleryHasSelection = _galleryStepKey.currentState?.hasSelection ?? false;
+      if (galleryHasSelection) {
+        actions.add(
+          TextButton(
+            onPressed: () => _galleryStepKey.currentState?.continueWithSelection(),
+            child: Text(
+              'Далее',
+              style: AppTextStyle.base(16, color: AppColors.postEditorCta, fontWeight: FontWeight.w700),
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
     if (_step == _PostStep.edit && _slots.isNotEmpty) {
       if (_activeAdjust == _EditAdjustTool.crop) {
@@ -793,12 +798,13 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         }
       }
     }
-    if (_step == _PostStep.details) {
+    if (_step == _PostStep.details && widget.customThirdStep == null) {
       actions.add(
         Padding(
           padding: const EdgeInsets.only(right: 4),
           child: BlocBuilder<PostCreateCubit, PostCreateState>(
-            buildWhen: (p, n) => p.maybeWhen(ready: (_, __, s, ___) => s, orElse: () => false) !=
+            buildWhen: (p, n) =>
+                p.maybeWhen(ready: (_, __, s, ___) => s, orElse: () => false) !=
                 n.maybeWhen(ready: (_, __, s, ___) => s, orElse: () => false),
             builder: (context, state) {
               final submitting = state.maybeWhen(ready: (_, __, s, ___) => s, orElse: () => false);
@@ -996,10 +1002,10 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
-                    itemCount: _PostCropAspectPreset.values.length,
+                    itemCount: _flowConfig.resolvedCropPresets.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (context, i) {
-                      final m = _PostCropAspectPreset.values[i];
+                      final m = _flowConfig.resolvedCropPresets[i];
                       return _buildCropAspectChip(
                         label: m.label,
                         selected: _cropAspectPreset == m,
@@ -1038,7 +1044,12 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
       }
       setState(() {
         _activeAdjust = _EditAdjustTool.crop;
-        _cropAspectPreset = _PostCropAspectPreset.square;
+        final i = _editIndex;
+        final slotAspect = (i >= 0 && i < _slots.length) ? _slots[i].aspect : '1x1';
+        _cropAspectPreset = _flowConfig.resolvedCropPresets.firstWhere(
+          (m) => m.fileAspect == slotAspect,
+          orElse: () => _defaultCropPreset,
+        );
         _cropController = CropController();
         _cropEditorReady = false;
         _cropWorking = false;
@@ -1476,9 +1487,8 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
                                         hit.displayLabel,
                                         style: AppTextStyle.base(13, color: AppColors.textColor),
                                       ),
-                                      onDeleted: () => setState(
-                                            () => _taggedPeople.removeWhere((e) => e.id == hit.id),
-                                          ),
+                                      onDeleted: () =>
+                                          setState(() => _taggedPeople.removeWhere((e) => e.id == hit.id)),
                                       deleteIconColor: AppColors.subTextColor,
                                       backgroundColor: AppColors.surfaceMuted,
                                       side: BorderSide(color: AppColors.border.withValues(alpha: 0.65)),

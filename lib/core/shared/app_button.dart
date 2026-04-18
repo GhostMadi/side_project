@@ -9,14 +9,17 @@ class AppButton extends StatefulWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
   final bool isExpanded;
-
+  final double? height;
+  final double? width;
   const AppButton({
     super.key,
+    this.height,
     required this.text,
     required this.onPressed,
     this.isLoading = false,
     this.isExpanded = true,
     this.child,
+    this.width,
   });
 
   @override
@@ -41,6 +44,8 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final isEnabled = widget.onPressed != null && !widget.isLoading;
+    final h = widget.height ?? 56;
+    final spinnerSize = (h * 0.42).clamp(16.0, 26.0);
 
     return AnimatedBuilder(
       animation: _jelly.scaleAnimation,
@@ -63,8 +68,8 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
                 }
               : null,
           child: Container(
-            height: 56,
-            width: widget.isExpanded ? double.infinity : null,
+            height: h,
+            width: widget.isExpanded ? double.infinity : widget.width,
             decoration: BoxDecoration(
               color: isEnabled ? AppColors.btnBackground : AppColors.btnDisabled,
               borderRadius: BorderRadius.circular(100),
@@ -80,9 +85,9 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
             ),
             child: Center(
               child: widget.isLoading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
+                  ? SizedBox(
+                      height: spinnerSize,
+                      width: spinnerSize,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),

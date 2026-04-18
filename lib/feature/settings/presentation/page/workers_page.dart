@@ -6,6 +6,7 @@ import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_button.dart';
 import 'package:side_project/core/shared/app_outlined_button.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 
 @RoutePage()
 class WorkersPage extends StatefulWidget {
@@ -113,11 +114,10 @@ class _WorkersPageState extends State<WorkersPage> {
     setState(() {
       _pendingIds.add(c.id);
     });
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text('Запрос на найм отправлен: @${c.nick}'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    AppSnackBar.show(
+      context,
+      message: 'Запрос на найм отправлен: @${c.nick}',
+      kind: AppSnackBarKind.success,
     );
   }
 
@@ -205,11 +205,10 @@ class _WorkersPageState extends State<WorkersPage> {
                               setState(() {
                                 _pendingServiceByWorker[c.id] = selected.toList();
                               });
-                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                SnackBar(
-                                  content: Text('Запрос отправлен: @${c.nick}'),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
+                              AppSnackBar.show(
+                                context,
+                                message: 'Запрос отправлен: @${c.nick}',
+                                kind: AppSnackBarKind.success,
                               );
                             },
                           ),

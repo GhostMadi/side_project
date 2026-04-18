@@ -1,20 +1,19 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_informer.dart';
 import 'package:side_project/feature/cluster/presentation/widget/owner_clusters_strip.dart';
-import 'package:side_project/feature/cluster_create_page/data/cluster_preview_session.dart';
+import 'package:side_project/feature/posts/presentation/cubit/posts_list_cubit.dart';
+import 'package:side_project/feature/posts/presentation/widget/posts_list_view.dart';
 import 'package:side_project/feature/profile/data/models/profile_model.dart';
-import 'package:side_project/feature/profile_page/presentation/models/profile_feed_preview.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_formatting.dart';
-import 'package:side_project/feature/profile_page/presentation/widget/profile_collection_card.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_actions.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_posts_tab_bar.dart';
-import 'package:side_project/feature/posts/presentation/widget/posts_list_view.dart';
 
-/// Контент профиля после загрузки: хедер, кластеры из Supabase (+ черновик), пустая сетка постов до API.
+/// Контент профиля после загрузки: хедер, кластеры из Supabase, сетка постов.
 class ProfileLoadedBody extends StatelessWidget {
   const ProfileLoadedBody({super.key, required this.profile});
 
@@ -22,40 +21,27 @@ class ProfileLoadedBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: ClusterPreviewSession.draftNotifier,
-      builder: (context, _) {
-        final draft = ClusterPreviewSession.draftNotifier.value;
-
-        final Widget? draftLeading = draft == null
-            ? null
-            : ProfileCollectionCard(
-                index: 0,
-                imageUrl: '',
-                memoryImageBytes: draft.coverBytes != null && draft.coverBytes!.isNotEmpty
-                    ? draft.coverBytes
-                    : null,
-                title: draft.title.trim().isEmpty ? kClusterDraftPlaceholderTitle : draft.title.trim(),
-                collectionSubtitle: draft.subtitle.trim().isEmpty ? null : draft.subtitle.trim(),
-                countLabel: profileCollectionCountLabel(kProfileClusterDraftMockPostCount),
-                isSelected: false,
-                onTap: () {},
-              );
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _ProfileHeaderFromModel(profile: profile),
-            OwnerClustersStrip(ownerId: profile.id, leading: draftLeading),
-            const ProfilePostsTabBar(),
-            PostsListView(
-              onPostTap: (post) {
-                context.router.push(PostDetailRoute(postId: post.id));
-              },
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ProfileHeaderFromModel(profile: profile),
+        OwnerClustersStrip(ownerId: profile.id),
+        const ProfilePostsTabBar(),
+        PostsListView(
+          onPostTap: (post) async {
+            final initialSaved = context.read<PostsListCubit>().state.maybeWhen(
+                  loaded: (_, __, savedByPostId, _, _, _, _) => savedByPostId[post.id],
+                  orElse: () => null,
+                );
+            final deleted = await context.router.push<bool>(
+              PostDetailRoute(post: post, initialIsSaved: initialSaved),
+            );
+            if (deleted == true && context.mounted) {
+              context.read<PostsListCubit>().reloadKeepingFilter();
+            }
+          },
+        ),
+      ],
     );
   }
 }
@@ -93,8 +79,16 @@ class _ProfileHeaderFromModel extends StatelessWidget {
       avatarImageUrl: profile.avatarUrl,
       statFollowers: ProfilePageFormatting.statString(profile.followersCount),
       statFollowing: ProfilePageFormatting.statString(profile.followingCount),
-      statThird: ProfilePageFormatting.statString(profile.clusterCount),
-      statThirdLabel: 'Коллекции',
+      statThird: ProfilePageFormatting.statString(profile.postCount),
+      statThirdLabel: 'Публикации',
+      statFourth: ProfilePageFormatting.statString(profile.clusterCount),
+      statFourthLabel: 'Коллекции',
+      onFollowersTap: () => context.router.root.push(
+        FollowListsRoute(profileId: profile.id, username: usernameForHeader, initialTabIndex: 0),
+      ),
+      onFollowingTap: () => context.router.root.push(
+        FollowListsRoute(profileId: profile.id, username: usernameForHeader, initialTabIndex: 1),
+      ),
       onMessage: () => context.router.root.push(const SettingsRoute()),
       onCreateContent: (kind) {
         switch (kind) {
@@ -102,7 +96,7 @@ class _ProfileHeaderFromModel extends StatelessWidget {
             context.router.root.push(const ClusterCreateRoute());
             break;
           case ProfileCreateContentKind.post:
-            context.router.root.push(const PostCreateRoute());
+            context.router.root.push(PostCreateRoute());
             break;
         }
       },

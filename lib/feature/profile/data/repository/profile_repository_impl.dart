@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 import 'dart:typed_data';
 
 import 'package:injectable/injectable.dart';
+import 'package:side_project/core/storage/prefs/profile_mini_cache_storage.dart';
 import 'package:side_project/feature/profile/data/models/profile_model.dart';
 import 'package:side_project/feature/profile/data/models/profile_search_hit.dart';
 import 'package:side_project/feature/profile/data/profile_image_compress.dart';
@@ -10,15 +11,30 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 @LazySingleton(as: ProfileRepository)
 class ProfileRepositoryImpl implements ProfileRepository {
-  ProfileRepositoryImpl(this._client);
+  ProfileRepositoryImpl(this._client, this._profileMiniCache);
 
   final SupabaseClient _client;
+  final ProfileMiniCacheStorage _profileMiniCache;
 
   @override
   Future<ProfileModel?> getById(String id) async {
     final data = await _client.from('profiles').select().eq('id', id).maybeSingle();
     if (data == null) return null;
     return ProfileModel.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  @override
+  Future<({String? username, String? avatarUrl})?> getMiniById(String id) async {
+    if (id.trim().isEmpty) return null;
+    final data = await _client.from('profiles').select('username,avatar_url').eq('id', id).maybeSingle();
+    if (data == null) return null;
+    final m = Map<String, dynamic>.from(data);
+    final u = (m['username'] as String?)?.trim();
+    final a = (m['avatar_url'] as String?)?.trim();
+    return (
+      username: (u != null && u.isNotEmpty) ? u : null,
+      avatarUrl: (a != null && a.isNotEmpty) ? a : null,
+    );
   }
 
   @override
@@ -262,6 +278,29 @@ class ProfileRepositoryImpl implements ProfileRepository {
         stackTrace: st,
       );
       rethrow;
+    }
+  }
+
+  @override
+  Future<void> prefetchMiniProfilesForUserIds(List<String> userIds) async {
+    final ids = userIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
+    if (ids.isEmpty) return;
+    try {
+      final response = await _client.from('profiles').select('id,username,avatar_url').inFilter('id', ids);
+      for (final row in _rows(response)) {
+        final id = row['id'] as String?;
+        if (id == null || id.isEmpty) continue;
+        final u = row['username'] as String?;
+        final a = row['avatar_url'] as String?;
+        await _profileMiniCache.write(id, username: u, avatarUrl: a);
+      }
+    } on PostgrestException catch (e, st) {
+      developer.log(
+        'prefetchMiniProfilesForUserIds: ${e.message}',
+        name: 'ProfileRepository',
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 }

@@ -5,6 +5,7 @@ import 'package:side_project/core/resources/dimension/app_dimension.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_button.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 
 @RoutePage()
 class BusinessClientsBroadcastPage extends StatefulWidget {
@@ -199,11 +200,10 @@ class _BusinessClientsBroadcastPageState extends State<BusinessClientsBroadcastP
           AppButton(
             text: 'Отправить рассылку',
             onPressed: () {
-              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                SnackBar(
-                  content: Text('Мок: рассылка на ~$count контактов'),
-                  behavior: SnackBarBehavior.floating,
-                ),
+              AppSnackBar.show(
+                context,
+                message: 'Мок: рассылка на ~$count контактов',
+                kind: AppSnackBarKind.info,
               );
             },
           ),

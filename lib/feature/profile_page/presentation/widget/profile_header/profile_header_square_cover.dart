@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:side_project/core/shared/jelly_press_controller.dart';
+import 'package:side_project/core/shared/app_progressive_network_image.dart';
 
 /// Квадратная обложка с jelly-squash по тапу.
 class ProfileHeaderSquareCover extends StatefulWidget {
@@ -61,10 +62,11 @@ class _ProfileHeaderSquareCoverState extends State<ProfileHeaderSquareCover>
                 child: SizedBox(
                   width: double.infinity,
                   height: 150,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      image: DecorationImage(image: NetworkImage(widget.imageUrl), fit: BoxFit.cover),
-                    ),
+                  child: AppProgressiveNetworkImage(
+                    imageUrl: widget.imageUrl,
+                    height: 150,
+                    fit: BoxFit.cover,
+                    thumbWidth: 320,
                   ),
                 ),
               ),

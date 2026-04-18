@@ -38,7 +38,7 @@ class ProfileHeaderShimmer extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: List.generate(
-                          3,
+                          4,
                           (_) => Column(
                             children: [
                               Container(

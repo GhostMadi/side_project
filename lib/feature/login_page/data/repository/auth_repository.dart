@@ -12,6 +12,9 @@ abstract class AuthRepository {
   Future<AuthUser> signInWithGoogle();
 
   Future<void> signOut();
+
+  /// После установки сессии: [wake_up_if_needed] в БД (hibernate → active).
+  Future<void> wakeUpIfNeeded();
 }
 
 @LazySingleton(as: AuthRepository)
@@ -50,6 +53,8 @@ class AuthRepositoryImpl implements AuthRepository {
 
     await _supabase.auth.signInWithIdToken(provider: OAuthProvider.google, idToken: idToken);
 
+    await wakeUpIfNeeded();
+
     final sessionUser = _supabase.auth.currentUser;
     if (sessionUser == null) {
       throw Exception('Сессия Supabase не создана после входа Google');
@@ -61,6 +66,16 @@ class AuthRepositoryImpl implements AuthRepository {
       name: 'GoogleAuth',
     );
     return appUser;
+  }
+
+  @override
+  Future<void> wakeUpIfNeeded() async {
+    if (_supabase.auth.currentSession == null) return;
+    try {
+      await _supabase.rpc<void>('wake_up_if_needed');
+    } catch (e, st) {
+      developer.log('wake_up_if_needed: $e', name: 'AuthRepository', error: e, stackTrace: st);
+    }
   }
 
   @override

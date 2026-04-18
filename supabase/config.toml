@@ -15,3 +15,6 @@ verify_jwt = false
 [functions.register_post_send]
 verify_jwt = false
 
+[functions.send_chat_attachments]
+verify_jwt = false
+

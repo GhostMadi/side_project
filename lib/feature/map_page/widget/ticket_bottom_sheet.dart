@@ -5,6 +5,7 @@ import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_button.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_map.dart';
 import 'package:side_project/feature/map_page/model/event_pin_preview.dart';
 
@@ -147,14 +148,12 @@ class EventTicketDetailsSheet extends StatelessWidget {
             text: 'Перейти в чат',
             onPressed: () {
               HapticFeedback.mediumImpact();
-              final messenger = ScaffoldMessenger.maybeOf(context);
-              Navigator.of(context).maybePop();
-              messenger?.showSnackBar(
-                const SnackBar(
-                  content: Text('Чат с заведением — подключите экран чата'),
-                  behavior: SnackBarBehavior.floating,
-                ),
+              AppSnackBar.show(
+                context,
+                message: 'Чат с заведением — подключите экран чата',
+                kind: AppSnackBarKind.info,
               );
+              Navigator.of(context).maybePop();
             },
           ),
         ],

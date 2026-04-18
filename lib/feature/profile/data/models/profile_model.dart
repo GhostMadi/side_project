@@ -6,7 +6,7 @@ import 'package:side_project/feature/profile_categories/data/models/profile_cate
 ///
 /// **Базовая таблица:** `id`, `email`, `full_name`, `username`, `category_code`, `city_code`,
 /// `country_code` (char(2)), `avatar_url`, `background_url`, `bio`, `phone`,
-/// `followers_count`, `following_count`, `cluster_count`, `created_at`, `updated_at`.
+/// `followers_count`, `following_count`, `cluster_count`, `post_count`, `created_at`, `updated_at`.
 ///
 /// **Дополнительно** (миграция `20260329140000_profiles_username_change_limit.sql`):
 /// `username_change_count`, `username_next_change_allowed_at` — лимит смены ника; в JSON могут
@@ -31,6 +31,7 @@ class ProfileModel {
     this.followersCount = 0,
     this.followingCount = 0,
     this.clusterCount = 0,
+    this.postCount = 0,
     this.usernameChangeCount = 0,
     this.usernameNextChangeAllowedAt,
     this.createdAt,
@@ -61,6 +62,9 @@ class ProfileModel {
   final int followersCount;
   final int followingCount;
   final int clusterCount;
+
+  /// Опубликованные посты в сетке профиля (не в архиве, не soft delete) — `profiles.post_count` в БД.
+  final int postCount;
 
   /// Сколько смен ника уже «использовано» в текущем окне (0…4).
   /// Первый ввод ника с пустого сюда не входит — считаем только смены «был ник → другой ник».
@@ -99,7 +103,9 @@ class ProfileModel {
       phone: json['phone'] as String?,
       followersCount: (json['followers_count'] as num?)?.toInt() ?? 0,
       followingCount: (json['following_count'] as num?)?.toInt() ?? 0,
-      clusterCount: (json['cluster_count'] as num?)?.toInt() ?? (json['collection_count'] as num?)?.toInt() ?? 0,
+      clusterCount:
+          (json['cluster_count'] as num?)?.toInt() ?? (json['collection_count'] as num?)?.toInt() ?? 0,
+      postCount: (json['post_count'] as num?)?.toInt() ?? 0,
       usernameChangeCount: (json['username_change_count'] as num?)?.toInt() ?? 0,
       usernameNextChangeAllowedAt: _parseDate(json['username_next_change_allowed_at']),
       createdAt: _parseDate(json['created_at']),
@@ -126,8 +132,7 @@ class ProfileModel {
   }
 
   /// Можно ли сменить ник, опираясь только на поля профиля (без лишнего запроса к API).
-  bool get canChangeUsername =>
-      !isUsernameChangeCooldownActive && usernameChangesRemaining > 0;
+  bool get canChangeUsername => !isUsernameChangeCooldownActive && usernameChangesRemaining > 0;
 
   /// Подпись города: enum или неизвестный slug из БД.
   String? get cityLabel => cityCode?.labelRu ?? citySlug;

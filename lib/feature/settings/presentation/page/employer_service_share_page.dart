@@ -5,6 +5,7 @@ import 'package:side_project/core/resources/dimension/app_dimension.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_button.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 
 class _MyService {
   const _MyService({required this.id, required this.title, required this.minutes, required this.price});
@@ -129,16 +130,13 @@ class _EmployerServiceSharePageState extends State<EmployerServiceSharePage> {
           AppButton(
             text: 'Отправить корзину',
             onPressed: () async {
-              final messenger = ScaffoldMessenger.maybeOf(context);
-              await context.router.maybePop();
-              messenger?.showSnackBar(
-                SnackBar(
-                  content: Text(
+              AppSnackBar.show(
+                context,
+                message:
                     'Корзина отправлена: ${_basket.length} услуг, привязок к аналитике: ${_serviceToAnalytics.length} (демо)',
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                ),
+                kind: AppSnackBarKind.success,
               );
+              await context.router.maybePop();
             },
           ),
         ],

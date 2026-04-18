@@ -133,6 +133,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create'**
   String get createTabLabel;
+
+  /// No description provided for @chatTabLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats'**
+  String get chatTabLabel;
 }
 
 class _AppLocalizationsDelegate

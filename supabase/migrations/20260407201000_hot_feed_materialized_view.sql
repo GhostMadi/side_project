@@ -17,8 +17,9 @@ with
   ),
   likes_24h as (
     select l.post_id, count(*)::bigint as n
-    from public.post_likes l
+    from public.post_reactions l
     join time_window w on l.created_at >= w.since_ts
+    where l.kind = 'like'
     group by l.post_id
   ),
   saves_24h as (

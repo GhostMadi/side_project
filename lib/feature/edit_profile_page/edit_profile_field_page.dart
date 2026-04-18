@@ -7,6 +7,7 @@ import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_dialog.dart';
 import 'package:side_project/core/shared/app_informer.dart';
 import 'package:side_project/core/shared/app_outlined_button.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
 import 'package:side_project/feature/edit_profile_page/profile_image_upload_flow.dart';
 import 'package:side_project/feature/profile/data/models/profile_model.dart';
@@ -50,7 +51,6 @@ class _EditProfileFieldPageState extends State<EditProfileFieldPage> {
 
   Future<void> _onDone() async {
     if (_saving) return;
-    final messenger = ScaffoldMessenger.of(context);
     final router = context.router;
     final cubit = context.read<ProfileCubit>();
     setState(() => _saving = true);
@@ -58,7 +58,7 @@ class _EditProfileFieldPageState extends State<EditProfileFieldPage> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (err != null) {
-      messenger.showSnackBar(SnackBar(content: Text(err), backgroundColor: AppColors.error));
+      AppSnackBar.show(context, message: err, kind: AppSnackBarKind.error);
       return;
     }
     router.maybePop();
@@ -193,9 +193,7 @@ class _EditProfilePhotoFieldPageState extends State<_EditProfilePhotoFieldPage> 
     if (!mounted) return;
     setState(() => _busy = false);
     if (err != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(err), backgroundColor: AppColors.error));
+      AppSnackBar.show(context, message: err, kind: AppSnackBarKind.error);
     }
   }
 
@@ -206,11 +204,10 @@ class _EditProfilePhotoFieldPageState extends State<_EditProfilePhotoFieldPage> 
     if (p == null) return;
     if (_imageUrl(p) == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isCover ? 'Сначала загрузите обложку.' : 'Сначала загрузите аватар.'),
-          backgroundColor: AppColors.textColor,
-        ),
+      AppSnackBar.show(
+        context,
+        message: _isCover ? 'Сначала загрузите обложку.' : 'Сначала загрузите аватар.',
+        kind: AppSnackBarKind.info,
       );
       return;
     }
@@ -229,9 +226,7 @@ class _EditProfilePhotoFieldPageState extends State<_EditProfilePhotoFieldPage> 
     if (!mounted) return;
     setState(() => _busy = false);
     if (err != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(err), backgroundColor: AppColors.error));
+      AppSnackBar.show(context, message: err, kind: AppSnackBarKind.error);
     }
   }
 

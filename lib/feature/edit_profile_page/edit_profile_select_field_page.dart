@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/feature/cities/presentation/widget/city_single_select_field.dart';
 import 'package:side_project/feature/countries/presentation/widget/country_single_select_field.dart';
 import 'package:side_project/feature/profile/data/models/profile_model.dart';
@@ -60,7 +61,6 @@ class _EditProfileSelectFieldPageState extends State<EditProfileSelectFieldPage>
 
   Future<void> _onDone() async {
     if (_saving) return;
-    final messenger = ScaffoldMessenger.of(context);
     final router = context.router;
     final cubit = context.read<ProfileCubit>();
     final p = cubit.state.mapOrNull(loaded: (s) => s.profile);
@@ -87,7 +87,7 @@ class _EditProfileSelectFieldPageState extends State<EditProfileSelectFieldPage>
     setState(() => _saving = false);
 
     if (err != null) {
-      messenger.showSnackBar(SnackBar(content: Text(err), backgroundColor: AppColors.error));
+      AppSnackBar.show(context, message: err, kind: AppSnackBarKind.error);
       return;
     }
     router.maybePop();

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
+import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
 import 'package:side_project/feature/login_page/presentation/cubit/auth_cubit.dart';
 import 'package:side_project/feature/login_page/presentation/widget/login_google_sign_in_button.dart';
@@ -27,7 +28,7 @@ class _RegisterPageState extends State<RegisterPage> {
         state.whenOrNull(
           authenticated: (_) => context.router.replaceAll([const ApplicationRoute()]),
           error: (message) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+            AppSnackBar.show(context, message: message, kind: AppSnackBarKind.error);
           },
         );
       },

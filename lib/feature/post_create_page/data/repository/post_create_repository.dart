@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:injectable/injectable.dart';
 import 'package:side_project/core/network/supabase_edge_functions_invoker.dart';
@@ -43,6 +44,11 @@ class PostCreateRepositoryImpl implements PostCreateRepository {
       'media': draft.media.map(_mediaToJson).toList(growable: false),
     };
 
+    developer.log(
+      'create_post draft: media=${draft.media.length}',
+      name: 'PostCreate',
+    );
+
     final res = await _functions.invoke('create_post', body: body);
     final data = res.data;
     if (data is! Map<String, dynamic>) {
@@ -57,17 +63,19 @@ class PostCreateRepositoryImpl implements PostCreateRepository {
 
   Map<String, dynamic> _mediaToJson(PostCreateMediaItem item) {
     return item.when(
-      image: (bytes, mime, ext) => {
+      image: (bytes, mime, ext, aspect) => {
         'type': 'image',
         'mime': mime,
         'ext': ext,
         'base64': base64Encode(bytes),
+        if (aspect != null && aspect.trim().isNotEmpty) 'aspect': aspect.trim(),
       },
-      video: (bytes, mime, ext) => {
+      video: (bytes, mime, ext, aspect) => {
         'type': 'video',
         'mime': mime,
         'ext': ext,
         'base64': base64Encode(bytes),
+        if (aspect != null && aspect.trim().isNotEmpty) 'aspect': aspect.trim(),
       },
     );
   }
