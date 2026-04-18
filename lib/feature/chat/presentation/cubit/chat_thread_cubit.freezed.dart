@@ -128,12 +128,12 @@ return error(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  initial,TResult Function()?  loading,TResult Function( String conversationId,  List<ChatThreadItem> items,  bool isLoadingMore,  bool hasMore,  String? errorMessage)?  loaded,TResult Function( String message)?  error,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  initial,TResult Function()?  loading,TResult Function( String conversationId,  List<ChatThreadItem> items,  bool isLoadingMore,  bool hasMore,  String? errorMessage,  int viewRevision)?  loaded,TResult Function( String message)?  error,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ChatThreadInitial() when initial != null:
 return initial();case _ChatThreadLoading() when loading != null:
 return loading();case _ChatThreadLoaded() when loaded != null:
-return loaded(_that.conversationId,_that.items,_that.isLoadingMore,_that.hasMore,_that.errorMessage);case _ChatThreadError() when error != null:
+return loaded(_that.conversationId,_that.items,_that.isLoadingMore,_that.hasMore,_that.errorMessage,_that.viewRevision);case _ChatThreadError() when error != null:
 return error(_that.message);case _:
   return orElse();
 
@@ -152,12 +152,12 @@ return error(_that.message);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  initial,required TResult Function()  loading,required TResult Function( String conversationId,  List<ChatThreadItem> items,  bool isLoadingMore,  bool hasMore,  String? errorMessage)  loaded,required TResult Function( String message)  error,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  initial,required TResult Function()  loading,required TResult Function( String conversationId,  List<ChatThreadItem> items,  bool isLoadingMore,  bool hasMore,  String? errorMessage,  int viewRevision)  loaded,required TResult Function( String message)  error,}) {final _that = this;
 switch (_that) {
 case _ChatThreadInitial():
 return initial();case _ChatThreadLoading():
 return loading();case _ChatThreadLoaded():
-return loaded(_that.conversationId,_that.items,_that.isLoadingMore,_that.hasMore,_that.errorMessage);case _ChatThreadError():
+return loaded(_that.conversationId,_that.items,_that.isLoadingMore,_that.hasMore,_that.errorMessage,_that.viewRevision);case _ChatThreadError():
 return error(_that.message);case _:
   throw StateError('Unexpected subclass');
 
@@ -175,12 +175,12 @@ return error(_that.message);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  initial,TResult? Function()?  loading,TResult? Function( String conversationId,  List<ChatThreadItem> items,  bool isLoadingMore,  bool hasMore,  String? errorMessage)?  loaded,TResult? Function( String message)?  error,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  initial,TResult? Function()?  loading,TResult? Function( String conversationId,  List<ChatThreadItem> items,  bool isLoadingMore,  bool hasMore,  String? errorMessage,  int viewRevision)?  loaded,TResult? Function( String message)?  error,}) {final _that = this;
 switch (_that) {
 case _ChatThreadInitial() when initial != null:
 return initial();case _ChatThreadLoading() when loading != null:
 return loading();case _ChatThreadLoaded() when loaded != null:
-return loaded(_that.conversationId,_that.items,_that.isLoadingMore,_that.hasMore,_that.errorMessage);case _ChatThreadError() when error != null:
+return loaded(_that.conversationId,_that.items,_that.isLoadingMore,_that.hasMore,_that.errorMessage,_that.viewRevision);case _ChatThreadError() when error != null:
 return error(_that.message);case _:
   return null;
 
@@ -257,7 +257,7 @@ String toString() {
 
 
 class _ChatThreadLoaded implements ChatThreadState {
-  const _ChatThreadLoaded({required this.conversationId, final  List<ChatThreadItem> items = const <ChatThreadItem>[], this.isLoadingMore = false, this.hasMore = true, this.errorMessage}): _items = items;
+  const _ChatThreadLoaded({required this.conversationId, final  List<ChatThreadItem> items = const <ChatThreadItem>[], this.isLoadingMore = false, this.hasMore = true, this.errorMessage, this.viewRevision = 0}): _items = items;
   
 
  final  String conversationId;
@@ -271,6 +271,8 @@ class _ChatThreadLoaded implements ChatThreadState {
 @JsonKey() final  bool isLoadingMore;
 @JsonKey() final  bool hasMore;
  final  String? errorMessage;
+/// Счётчик синхронизации: Bloc не эмитит при равном глубоком [items]; инкремент при любом ответе сервера.
+@JsonKey() final  int viewRevision;
 
 /// Create a copy of ChatThreadState
 /// with the given fields replaced by the non-null parameter values.
@@ -282,16 +284,16 @@ _$ChatThreadLoadedCopyWith<_ChatThreadLoaded> get copyWith => __$ChatThreadLoade
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatThreadLoaded&&(identical(other.conversationId, conversationId) || other.conversationId == conversationId)&&const DeepCollectionEquality().equals(other._items, _items)&&(identical(other.isLoadingMore, isLoadingMore) || other.isLoadingMore == isLoadingMore)&&(identical(other.hasMore, hasMore) || other.hasMore == hasMore)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatThreadLoaded&&(identical(other.conversationId, conversationId) || other.conversationId == conversationId)&&const DeepCollectionEquality().equals(other._items, _items)&&(identical(other.isLoadingMore, isLoadingMore) || other.isLoadingMore == isLoadingMore)&&(identical(other.hasMore, hasMore) || other.hasMore == hasMore)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage)&&(identical(other.viewRevision, viewRevision) || other.viewRevision == viewRevision));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,conversationId,const DeepCollectionEquality().hash(_items),isLoadingMore,hasMore,errorMessage);
+int get hashCode => Object.hash(runtimeType,conversationId,const DeepCollectionEquality().hash(_items),isLoadingMore,hasMore,errorMessage,viewRevision);
 
 @override
 String toString() {
-  return 'ChatThreadState.loaded(conversationId: $conversationId, items: $items, isLoadingMore: $isLoadingMore, hasMore: $hasMore, errorMessage: $errorMessage)';
+  return 'ChatThreadState.loaded(conversationId: $conversationId, items: $items, isLoadingMore: $isLoadingMore, hasMore: $hasMore, errorMessage: $errorMessage, viewRevision: $viewRevision)';
 }
 
 
@@ -302,7 +304,7 @@ abstract mixin class _$ChatThreadLoadedCopyWith<$Res> implements $ChatThreadStat
   factory _$ChatThreadLoadedCopyWith(_ChatThreadLoaded value, $Res Function(_ChatThreadLoaded) _then) = __$ChatThreadLoadedCopyWithImpl;
 @useResult
 $Res call({
- String conversationId, List<ChatThreadItem> items, bool isLoadingMore, bool hasMore, String? errorMessage
+ String conversationId, List<ChatThreadItem> items, bool isLoadingMore, bool hasMore, String? errorMessage, int viewRevision
 });
 
 
@@ -319,14 +321,15 @@ class __$ChatThreadLoadedCopyWithImpl<$Res>
 
 /// Create a copy of ChatThreadState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? conversationId = null,Object? items = null,Object? isLoadingMore = null,Object? hasMore = null,Object? errorMessage = freezed,}) {
+@pragma('vm:prefer-inline') $Res call({Object? conversationId = null,Object? items = null,Object? isLoadingMore = null,Object? hasMore = null,Object? errorMessage = freezed,Object? viewRevision = null,}) {
   return _then(_ChatThreadLoaded(
 conversationId: null == conversationId ? _self.conversationId : conversationId // ignore: cast_nullable_to_non_nullable
 as String,items: null == items ? _self._items : items // ignore: cast_nullable_to_non_nullable
 as List<ChatThreadItem>,isLoadingMore: null == isLoadingMore ? _self.isLoadingMore : isLoadingMore // ignore: cast_nullable_to_non_nullable
 as bool,hasMore: null == hasMore ? _self.hasMore : hasMore // ignore: cast_nullable_to_non_nullable
 as bool,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,viewRevision: null == viewRevision ? _self.viewRevision : viewRevision // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

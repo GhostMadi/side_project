@@ -24,6 +24,8 @@ abstract class ChatThreadState with _$ChatThreadState {
     @Default(false) bool isLoadingMore,
     @Default(true) bool hasMore,
     String? errorMessage,
+    /// Счётчик синхронизации: Bloc не эмитит при равном глубоком [items]; инкремент при любом ответе сервера.
+    @Default(0) int viewRevision,
   }) = _ChatThreadLoaded;
   const factory ChatThreadState.error(String message) = _ChatThreadError;
 }
@@ -42,6 +44,15 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Timer? _debounceReload;
 
   static String _localId() => 'local_${DateTime.now().microsecondsSinceEpoch}';
+
+  ChatThreadState _withServerViewRevision(ChatThreadState? previous, ChatThreadState next) {
+    final prevRev = previous?.maybeMap(loaded: (l) => l.viewRevision, orElse: () => null);
+    final gen = (prevRev ?? 0) + 1;
+    return next.maybeMap(
+      loaded: (l) => l.copyWith(viewRevision: gen),
+      orElse: () => next,
+    );
+  }
 
   Future<void> load(String conversationId) async {
     final cid = conversationId.trim();
@@ -70,13 +81,16 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       final list = await _repo.listMessages(conversationId: cid, limit: _pageSize);
       final current = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (current != null) {
-        emit(_reconcileWithOptimistic(current, list));
+        emit(_withServerViewRevision(state, _reconcileWithOptimistic(current, list)));
       } else {
         emit(
-          ChatThreadState.loaded(
-            conversationId: cid,
-            items: list.map(ChatThreadItem.server).toList(growable: false),
-            hasMore: list.length >= _pageSize,
+          _withServerViewRevision(
+            state,
+            ChatThreadState.loaded(
+              conversationId: cid,
+              items: list.map(ChatThreadItem.server).toList(growable: false),
+              hasMore: list.length >= _pageSize,
+            ),
           ),
         );
       }
@@ -100,7 +114,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (s == null) return;
     try {
       final list = await _repo.listMessages(conversationId: s.conversationId, limit: _pageSize);
-      emit(_reconcileWithOptimistic(s, list));
+      emit(_withServerViewRevision(state, _reconcileWithOptimistic(s, list)));
       final uid = _client.auth.currentUser?.id.trim();
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: s.conversationId, messages: list));
@@ -134,10 +148,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         ...older.map(ChatThreadItem.server),
         ...s.items,
       ];
-      emit(s.copyWith(
-        items: merged,
-        isLoadingMore: false,
-        hasMore: older.length >= _pageSize,
+      emit(_withServerViewRevision(
+        state,
+        s.copyWith(
+          items: merged,
+          isLoadingMore: false,
+          hasMore: older.length >= _pageSize,
+        ),
       ));
     } catch (e) {
       emit(s.copyWith(isLoadingMore: false, errorMessage: '$e'));
@@ -517,7 +534,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       return;
     }
     if (row == null) {
-      await refresh();
+      await _refreshTwiceForLag();
       return;
     }
 
@@ -538,7 +555,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       serverMsgs.removeAt(0);
     }
 
-    emit(_reconcileWithOptimistic(s, serverMsgs));
+    emit(_withServerViewRevision(state, _reconcileWithOptimistic(s, serverMsgs)));
 
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
@@ -607,6 +624,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       if (isClosed) return;
       unawaited(refresh());
     });
+  }
+
+  Future<void> _refreshTwiceForLag() async {
+    await refresh();
+    await Future<void>.delayed(const Duration(milliseconds: 420));
+    if (isClosed) return;
+    await refresh();
   }
 
   @override

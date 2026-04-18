@@ -125,10 +125,14 @@ class ChatRepositoryImpl implements ChatRepository {
         'get_message_enriched',
         params: {'p_message_id': id},
       );
-      if (res is! List || res.isEmpty) return null;
-      final row = res.first;
-      if (row is! Map) return null;
-      return ChatMessageEnriched.fromJson(Map<String, dynamic>.from(row));
+      Map<String, dynamic>? rowMap;
+      if (res is Map) {
+        rowMap = Map<String, dynamic>.from(res);
+      } else if (res is List && res.isNotEmpty && res.first is Map) {
+        rowMap = Map<String, dynamic>.from(res.first as Map);
+      }
+      if (rowMap == null) return null;
+      return ChatMessageEnriched.fromJson(rowMap);
     } catch (_) {
       return null;
     }

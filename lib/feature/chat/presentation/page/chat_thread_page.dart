@@ -167,7 +167,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                             error: (m) => Center(
                               child: Text(m, style: AppTextStyle.base(14, color: AppColors.subTextColor)),
                             ),
-                            loaded: (conversationId, items, isLoadingMore, hasMore, errorMessage) {
+                            loaded: (conversationId, items, isLoadingMore, hasMore, errorMessage, _) {
                               return MediaQuery.removePadding(
                                 context: context,
                                 removeRight: true,
