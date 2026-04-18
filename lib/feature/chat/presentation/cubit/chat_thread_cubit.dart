@@ -947,10 +947,11 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
 
   void _subscribeRealtime(String conversationId) {
     _channel?.unsubscribe();
-    final cid = conversationId.trim();
+    final cid = conversationId.trim().toLowerCase();
     if (cid.isEmpty) return;
 
     /// Один канал на тред + фильтр `conversation_id=eq.{uuid}` на стороне Realtime (см. Supabase docs).
+    /// UUID из URL/роутера нормализуем — иначе фильтр может не совпасть с текстом uuid в WAL.
     final convFilter = PostgresChangeFilter(
       type: PostgresChangeFilterType.eq,
       column: 'conversation_id',
@@ -978,13 +979,16 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         filter: convFilter,
         callback: onMessagesChange,
       )
-      // Собеседник прочитал (mark_conversation_read) — обновляем read_by_peer на исходящих без нового сообщения.
+      // Собеседник вызвал mark_conversation_read — строка участника UPDATE; без debounce, чтобы галочки у отправителя обновились сразу.
       ..onPostgresChanges(
         event: PostgresChangeEvent.update,
         schema: 'public',
         table: 'chat_participants',
         filter: convFilter,
-        callback: (_) => _scheduleDebouncedFullRefresh(),
+        callback: (_) {
+          _debounceReload?.cancel();
+          unawaited(refresh(syncReadReceipt: false));
+        },
       )
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
