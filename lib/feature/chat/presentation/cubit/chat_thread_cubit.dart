@@ -32,21 +32,41 @@ abstract class ChatThreadState with _$ChatThreadState {
 
 @injectable
 class ChatThreadCubit extends Cubit<ChatThreadState> {
-  ChatThreadCubit(this._repo, this._client, this._cache) : super(const ChatThreadState.initial());
-
   final ChatRepository _repo;
   final SupabaseClient _client;
   final ChatThreadCacheStorage _cache;
 
-  static const _pageSize = 50;
-  /// Если Realtime ещё не настроен на проекте — периодически подтягиваем ленту.
-  static const _safetyPollInterval = Duration(seconds: 12);
+  /// Окно видимых сообщений + буфер под merge realtime без лишних обрезаний.
+  static const _messageWindow = 40;
+  static const _realtimeMergeBuffer = 10;
+  static const _fetchLimit = _messageWindow + _realtimeMergeBuffer;
+  /// Резерв, если Realtime недоступен.
+  static const _safetyPollInterval = Duration(seconds: 18);
+  /// Пока недавно был трафик по сокету — полный refresh не делаем (см. safety poll).
+  static const _safetyPollSkipAfterRealtime = Duration(seconds: 55);
+  /// Одна повторная попытка get_message_enriched (лаг коммита); дальше — один refresh.
+  static const _mergeRetryDelay = Duration(milliseconds: 60);
+  static const _debounceRealtimeRefresh = Duration(milliseconds: 140);
 
   RealtimeChannel? _channel;
   Timer? _debounceReload;
   Timer? _safetyPoll;
+  DateTime? _lastThreadRealtimeActivityAt;
+
+  ChatThreadCubit(this._repo, this._client, this._cache) : super(const ChatThreadState.initial());
 
   static String _localId() => 'local_${DateTime.now().microsecondsSinceEpoch}';
+
+  /// Детерминированный порядок: одинаковый created_at возможен — различаем по id.
+  static int _compareEnrichedMessages(ChatMessageEnriched a, ChatMessageEnriched b) {
+    final byTime = a.message.createdAt.compareTo(b.message.createdAt);
+    if (byTime != 0) return byTime;
+    return a.message.id.compareTo(b.message.id);
+  }
+
+  void _bumpThreadRealtimeActivity() {
+    _lastThreadRealtimeActivityAt = DateTime.now();
+  }
 
   ChatThreadState _withServerViewRevision(ChatThreadState? previous, ChatThreadState next) {
     final prevRev = previous?.maybeMap(loaded: (l) => l.viewRevision, orElse: () => null);
@@ -57,12 +77,34 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     );
   }
 
+  /// Следующий `list_messages_enriched` может прийти без новой строки (лаг реплики). Объединяем с тем,
+  /// что уже показано, иначе refresh «съедает» сообщение, которое только что докинули через Realtime/merge.
+  List<ChatMessageEnriched> _mergeFetchedWithVisibleServer(
+    _ChatThreadLoaded visible,
+    List<ChatMessageEnriched> fetched,
+  ) {
+    final byId = <String, ChatMessageEnriched>{};
+    for (final it in visible.items) {
+      it.maybeWhen(
+        server: (d) => byId[d.message.id] = d,
+        orElse: () {},
+      );
+    }
+    for (final m in fetched) {
+      byId[m.message.id] = m;
+    }
+    final merged = byId.values.toList()..sort(_compareEnrichedMessages);
+    if (merged.length <= _fetchLimit) return merged;
+    return merged.sublist(merged.length - _fetchLimit);
+  }
+
   Future<void> load(String conversationId) async {
     final cid = conversationId.trim();
     if (cid.isEmpty) {
       emit(const ChatThreadState.error('Пустой conversationId'));
       return;
     }
+    _lastThreadRealtimeActivityAt = null;
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
       final cached = await _cache.read(userId: uid, conversationId: cid);
@@ -71,7 +113,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ChatThreadState.loaded(
             conversationId: cid,
             items: cached.map(ChatThreadItem.server).toList(growable: false),
-            hasMore: cached.length >= _pageSize,
+            hasMore: cached.length >= _fetchLimit,
           ),
         );
       } else {
@@ -81,18 +123,22 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       emit(const ChatThreadState.loading());
     }
     try {
-      final list = await _repo.listMessages(conversationId: cid, limit: _pageSize);
+      final list = await _repo.listMessages(conversationId: cid, limit: _fetchLimit);
       final current = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      late final List<ChatMessageEnriched> serverSnapshotForPersistence;
       if (current != null) {
-        emit(_withServerViewRevision(state, _reconcileWithOptimistic(current, list)));
+        final mergedList = _mergeFetchedWithVisibleServer(current, list);
+        serverSnapshotForPersistence = mergedList;
+        emit(_withServerViewRevision(state, _reconcileWithOptimistic(current, mergedList)));
       } else {
+        serverSnapshotForPersistence = list;
         emit(
           _withServerViewRevision(
             state,
             ChatThreadState.loaded(
               conversationId: cid,
               items: list.map(ChatThreadItem.server).toList(growable: false),
-              hasMore: list.length >= _pageSize,
+              hasMore: list.length >= _fetchLimit,
             ),
           ),
         );
@@ -100,11 +146,11 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       _subscribeRealtime(cid);
       _startSafetyPoll(cid);
       if (uid != null && uid.isNotEmpty) {
-        unawaited(_cache.write(userId: uid, conversationId: cid, messages: list));
+        unawaited(_cache.write(userId: uid, conversationId: cid, messages: serverSnapshotForPersistence));
       }
       // Mark read best-effort.
-      if (list.isNotEmpty) {
-        unawaited(_repo.markRead(conversationId: cid, lastMessageId: list.last.message.id));
+      if (serverSnapshotForPersistence.isNotEmpty) {
+        unawaited(_repo.markRead(conversationId: cid, lastMessageId: serverSnapshotForPersistence.last.message.id));
       } else {
         unawaited(_repo.markRead(conversationId: cid));
       }
@@ -118,16 +164,17 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (s == null) return;
     final cid = s.conversationId.trim();
     try {
-      final list = await _repo.listMessages(conversationId: cid, limit: _pageSize);
+      final list = await _repo.listMessages(conversationId: cid, limit: _fetchLimit);
       final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (cur == null || cur.conversationId.trim() != cid) return;
-      emit(_withServerViewRevision(state, _reconcileWithOptimistic(cur, list)));
+      final mergedList = _mergeFetchedWithVisibleServer(cur, list);
+      emit(_withServerViewRevision(state, _reconcileWithOptimistic(cur, mergedList)));
       final uid = _client.auth.currentUser?.id.trim();
       if (uid != null && uid.isNotEmpty) {
-        unawaited(_cache.write(userId: uid, conversationId: cid, messages: list));
+        unawaited(_cache.write(userId: uid, conversationId: cid, messages: mergedList));
       }
-      if (list.isNotEmpty) {
-        unawaited(_repo.markRead(conversationId: cid, lastMessageId: list.last.message.id));
+      if (mergedList.isNotEmpty) {
+        unawaited(_repo.markRead(conversationId: cid, lastMessageId: mergedList.last.message.id));
       }
     } catch (e) {
       final again = state.maybeMap(loaded: (v) => v, orElse: () => null);
@@ -151,7 +198,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
             );
       final older = await _repo.listMessages(
         conversationId: s.conversationId,
-        limit: _pageSize,
+        limit: _fetchLimit,
         before: before,
       );
       final merged = [
@@ -163,7 +210,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         s.copyWith(
           items: merged,
           isLoadingMore: false,
-          hasMore: older.length >= _pageSize,
+          hasMore: older.length >= _fetchLimit,
         ),
       ));
     } catch (e) {
@@ -264,7 +311,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
         );
       }
-      unawaited(refresh());
+      // Полный list не дергаем: подтверждение придёт через Realtime INSERT → merge (или reconcile с сервером).
     } catch (e) {
       final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (cur == null) return;
@@ -320,7 +367,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
         );
       }
-      unawaited(refresh());
+      // Без refresh после send: Realtime доставит строку; иначе сработает safety poll / pull.
     } catch (e) {
       final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (cur == null) return;
@@ -408,7 +455,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     // Build mutable list of server entries.
     final server = prev.copyWith(
       items: serverMessages.map(ChatThreadItem.server).toList(),
-      hasMore: serverMessages.length >= _pageSize,
+      hasMore: serverMessages.length >= _fetchLimit,
       errorMessage: null,
     );
 
@@ -526,7 +573,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     // Final list = server (filtered) + optimistic (keeps stable keys/position).
     return prev.copyWith(
       items: [...filteredServer, ...updatedOptimistic],
-      hasMore: serverMessages.length >= _pageSize,
+      hasMore: serverMessages.length >= _fetchLimit,
       errorMessage: null,
     );
   }
@@ -538,14 +585,14 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     final conversationId = s.conversationId.trim();
 
     var row = await _repo.getMessageEnriched(messageId);
-    if (row == null && attempt < 2) {
-      await Future<void>.delayed(const Duration(milliseconds: 240));
+    if (row == null && attempt == 0) {
+      await Future<void>.delayed(_mergeRetryDelay);
       if (isClosed) return;
-      await _mergeIncomingMessageRow(messageId, attempt: attempt + 1);
+      await _mergeIncomingMessageRow(messageId, attempt: 1);
       return;
     }
     if (row == null) {
-      await _refreshTwiceForLag();
+      await refresh();
       return;
     }
 
@@ -564,8 +611,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (serverMsgs.any((m) => m.message.id == row.message.id)) return;
 
     serverMsgs.add(row);
-    serverMsgs.sort((a, b) => a.message.createdAt.compareTo(b.message.createdAt));
-    while (serverMsgs.length > _pageSize) {
+    serverMsgs.sort(_compareEnrichedMessages);
+    while (serverMsgs.length > _fetchLimit) {
       serverMsgs.removeAt(0);
     }
 
@@ -576,7 +623,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (uid != null && uid.isNotEmpty) {
       unawaited(_cache.write(userId: uid, conversationId: conversationId, messages: serverMsgs));
     }
-    unawaited(_repo.markRead(conversationId: conversationId, lastMessageId: row.message.id));
+    // Не блокируем появление пузыря — прочитано уходит после отрисовки.
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 80), () {
+        if (isClosed) return;
+        unawaited(_repo.markRead(conversationId: conversationId, lastMessageId: row.message.id));
+      }),
+    );
   }
 
   void _startSafetyPoll(String conversationId) {
@@ -587,6 +640,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       if (isClosed) return;
       final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (loaded == null || loaded.conversationId.trim() != cid) return;
+      final last = _lastThreadRealtimeActivityAt;
+      if (last != null && DateTime.now().difference(last) < _safetyPollSkipAfterRealtime) {
+        return;
+      }
       unawaited(refresh());
     });
   }
@@ -605,14 +662,15 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     }
 
     void onMessagesChange(PostgresChangePayload payload) {
+      if (!messageBelongsToThread(payload)) return;
+      _bumpThreadRealtimeActivity();
       if (payload.eventType == PostgresChangeEvent.insert) {
         final rawId = payload.newRecord['id'];
-        if (rawId != null && messageBelongsToThread(payload)) {
+        if (rawId != null) {
           unawaited(_mergeIncomingMessageRow(rawId.toString()));
         }
         return;
       }
-      if (!messageBelongsToThread(payload)) return;
       _scheduleDebouncedFullRefresh();
     }
 
@@ -642,22 +700,19 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         callback: (_) => _scheduleDebouncedFullRefresh(),
       );
 
-    _channel!.subscribe();
+    _channel!.subscribe((status, _) {
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        _bumpThreadRealtimeActivity();
+      }
+    });
   }
 
   void _scheduleDebouncedFullRefresh() {
     _debounceReload?.cancel();
-    _debounceReload = Timer(const Duration(milliseconds: 220), () {
+    _debounceReload = Timer(_debounceRealtimeRefresh, () {
       if (isClosed) return;
       unawaited(refresh());
     });
-  }
-
-  Future<void> _refreshTwiceForLag() async {
-    await refresh();
-    await Future<void>.delayed(const Duration(milliseconds: 420));
-    if (isClosed) return;
-    await refresh();
   }
 
   @override

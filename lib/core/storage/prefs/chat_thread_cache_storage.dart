@@ -12,6 +12,9 @@ class ChatThreadCacheStorage {
 
   String _key(String userId, String conversationId) => 'chat_thread_v1_${userId}_$conversationId';
 
+  /// Свежесть snapshot для списка сообщений: дольше — выше риск «фантомного» UI.
+  static const maxAge = Duration(seconds: 6);
+
   Future<List<ChatMessageEnriched>?> read({
     required String userId,
     required String conversationId,
@@ -23,8 +26,24 @@ class ChatThreadCacheStorage {
     if (raw == null || raw.trim().isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List) return null;
-      return decoded.whereType<Map>().map((e) => ChatMessageEnriched.fromJson(e.cast<String, dynamic>())).toList(growable: false);
+      if (decoded is Map) {
+        final v = decoded['v'];
+        if (v == 2) {
+          final savedAtRaw = decoded['savedAt'];
+          final savedAt = savedAtRaw == null ? null : DateTime.tryParse(savedAtRaw.toString())?.toUtc();
+          if (savedAt != null && DateTime.now().toUtc().difference(savedAt) > maxAge) {
+            return null;
+          }
+          final list = decoded['messages'];
+          if (list is! List) return null;
+          return list.whereType<Map>().map((e) => ChatMessageEnriched.fromJson(e.cast<String, dynamic>())).toList(growable: false);
+        }
+        return null;
+      }
+      if (decoded is List) {
+        return decoded.whereType<Map>().map((e) => ChatMessageEnriched.fromJson(e.cast<String, dynamic>())).toList(growable: false);
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -40,7 +59,11 @@ class ChatThreadCacheStorage {
     if (uid.isEmpty || cid.isEmpty) return;
     await _store.write(
       _key(uid, cid),
-      jsonEncode(messages.map((e) => e.toJson()).toList(growable: false)),
+      jsonEncode(<String, dynamic>{
+        'v': 2,
+        'savedAt': DateTime.now().toUtc().toIso8601String(),
+        'messages': messages.map((e) => e.toJson()).toList(growable: false),
+      }),
     );
   }
 

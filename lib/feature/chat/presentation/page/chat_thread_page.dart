@@ -112,7 +112,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             if (loaded == null || loaded.items.isEmpty) return false;
             final prevLoaded = prev.maybeMap(loaded: (s) => s, orElse: () => null);
             if (prevLoaded == null) return true;
-            // Нельзя полагаться только на длину: при limit=50 новое сообщение
+            // Нельзя полагаться только на длину: при скользящем окне новое сообщение
             // сдвигает окно — счётчик тот же, но хвост другой; без скролла вниз
             // пузырь «не виден», хотя данные уже в state.
             if (loaded.items.length != prevLoaded.items.length) return true;
