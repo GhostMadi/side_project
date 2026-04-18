@@ -654,8 +654,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     _channel = _client.channel('chat_thread_$conversationId');
 
     bool messageBelongsToThread(PostgresChangePayload payload) {
-      final fromNew = payload.newRecord['conversation_id'];
-      final fromOld = payload.oldRecord['conversation_id'];
+      final nr = payload.newRecord;
+      final od = payload.oldRecord;
+      final fromNew = nr['conversation_id'] ?? nr['conversationId'];
+      final fromOld = od['conversation_id'] ?? od['conversationId'];
       final raw = fromNew ?? fromOld;
       if (raw == null) return false;
       return raw.toString().trim().toLowerCase() == cidNorm;
@@ -700,11 +702,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         callback: (_) => _scheduleDebouncedFullRefresh(),
       );
 
-    _channel!.subscribe((status, _) {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        _bumpThreadRealtimeActivity();
-      }
-    });
+    // Не bump здесь: иначе safety poll ~55 с не делает refresh — при сбое realtime/реплики
+    // новые сообщения не появляются до истечения окна.
+    _channel!.subscribe();
   }
 
   void _scheduleDebouncedFullRefresh() {

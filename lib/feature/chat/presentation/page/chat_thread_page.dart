@@ -104,6 +104,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
+      key: ValueKey<String>(widget.conversationId),
       providers: [BlocProvider(create: (_) => sl<ChatThreadCubit>()..load(widget.conversationId))],
       child: DefaultStickyHeaderController(
         child: BlocListener<ChatThreadCubit, ChatThreadState>(
