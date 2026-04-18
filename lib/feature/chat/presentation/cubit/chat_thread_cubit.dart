@@ -978,6 +978,14 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         filter: convFilter,
         callback: onMessagesChange,
       )
+      // Собеседник прочитал (mark_conversation_read) — обновляем read_by_peer на исходящих без нового сообщения.
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'chat_participants',
+        filter: convFilter,
+        callback: (_) => _scheduleDebouncedFullRefresh(),
+      )
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
