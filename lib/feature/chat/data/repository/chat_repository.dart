@@ -51,6 +51,9 @@ abstract class ChatRepository {
 
   Future<void> markRead({required String conversationId, String? lastMessageId});
 
+  /// Другие активные участники чата → их `last_read_message_id` (для локальных галочек без повторного list_messages).
+  Future<Map<String, String?>> peerLastReadCursors(String conversationId);
+
   Future<List<({String conversationId, ChatMessageEnriched message})>> searchMessages({
     required String query,
     String? conversationId,

@@ -314,6 +314,36 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<Map<String, String?>> peerLastReadCursors(String conversationId) async {
+    final uid = _client.auth.currentUser?.id.trim();
+    if (uid == null || uid.isEmpty) return {};
+    final cid = conversationId.trim();
+    if (cid.isEmpty) return {};
+    final data = await _client
+        .from('chat_participants')
+        .select('user_id,last_read_message_id')
+        .eq('conversation_id', cid)
+        .neq('user_id', uid)
+        .isFilter('left_at', null);
+    final list = data as List<dynamic>;
+    final map = <String, String?>{};
+    for (final row in list) {
+      if (row is! Map) continue;
+      final m = Map<String, dynamic>.from(row);
+      final id = m['user_id']?.toString().trim();
+      if (id == null || id.isEmpty) continue;
+      final lr = m['last_read_message_id'];
+      if (lr == null) {
+        map[id] = null;
+      } else {
+        final s = lr.toString().trim();
+        map[id] = s.isEmpty ? null : s;
+      }
+    }
+    return map;
+  }
+
+  @override
   Future<List<({String conversationId, ChatMessageEnriched message})>> searchMessages({
     required String query,
     String? conversationId,

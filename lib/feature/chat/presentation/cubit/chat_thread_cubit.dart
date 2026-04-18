@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
 import 'package:side_project/core/storage/prefs/chat_thread_cache_storage.dart';
 import 'package:side_project/feature/chat/data/models/chat_message_enriched.dart';
+import 'package:side_project/feature/chat/data/models/chat_message_model.dart';
 import 'package:side_project/feature/chat/data/repository/chat_repository.dart';
 import 'package:side_project/feature/chat/domain/chat_outgoing_attachment.dart';
 import 'package:side_project/feature/chat/presentation/models/chat_optimistic_delivery.dart';
@@ -54,6 +55,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Timer? _debounceReload;
   Timer? _readReceiptDebounce;
   String? _lastMarkedReadMessageId;
+
+  /// Прочие участники (`user_id` → `last_read_message_id`). После [load]/[refresh] синхронизируется с БД; Realtime UPDATE только дополняет.
+  final Map<String, String?> _peerLastReadByUserId = {};
+  bool _peerReadMapReady = false;
 
   /// Пока [load] ждёт `list_messages_enriched`, INSERT уже мог прийти по WS — обработаем после перехода в loaded.
   final List<Map<String, dynamic>> _pendingMessageInsertRows = [];
@@ -216,6 +221,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     _skipRpcEnrichmentIds.clear();
     _readReceiptDebounce?.cancel();
     _lastMarkedReadMessageId = null;
+    _peerLastReadByUserId.clear();
+    _peerReadMapReady = false;
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
       final cached = await _cache.read(userId: uid, conversationId: cid);
@@ -258,6 +265,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         );
       }
       _flushPendingMessageInserts(cid);
+      await _syncPeerReadCursorsFromServer(cid);
+      _peerReadMapReady = true;
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: serverSnapshotForPersistence));
       }
@@ -285,6 +294,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       if (cur == null || cur.conversationId.trim() != cid) return;
       final mergedList = _mergeFetchedWithVisibleServer(cur, list);
       _emitIfOpen(_withServerViewRevision(state, _reconcileWithOptimistic(cur, mergedList)));
+      await _syncPeerReadCursorsFromServer(cid);
+      _peerReadMapReady = true;
       final uid = _client.auth.currentUser?.id.trim();
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: mergedList));
@@ -969,6 +980,123 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     } catch (_) {}
   }
 
+  Future<void> _syncPeerReadCursorsFromServer(String conversationId) async {
+    try {
+      final cid = conversationId.trim();
+      if (cid.isEmpty) return;
+      final m = await _repo.peerLastReadCursors(cid);
+      if (isClosed) return;
+      _peerLastReadByUserId
+        ..clear()
+        ..addAll(m);
+    } catch (_) {}
+  }
+
+  /// Совпадает с SQL в `list_messages_enriched`: сообщение строго после курсора «прочитано до».
+  static bool _lexMsgStrictlyAfter(ChatMessageModel a, ChatMessageModel b) {
+    final c = a.createdAt.compareTo(b.createdAt);
+    if (c > 0) return true;
+    if (c < 0) return false;
+    return a.id.compareTo(b.id) > 0;
+  }
+
+  void _onChatParticipantsRealtimeUpdate(PostgresChangePayload payload) {
+    if (payload.eventType != PostgresChangeEvent.update) return;
+    final raw = payload.newRecord;
+    if (raw.isEmpty) return;
+    final uidRow = raw['user_id']?.toString().trim();
+    final myId = _client.auth.currentUser?.id.trim();
+    if (uidRow == null || uidRow.isEmpty || myId == null || myId.isEmpty) return;
+    if (uidRow == myId) return;
+    final lrStr = raw['last_read_message_id']?.toString().trim();
+    _peerLastReadByUserId[uidRow] = (lrStr == null || lrStr.isEmpty) ? null : lrStr;
+
+    final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (loaded == null) return;
+    if (!_peerReadMapReady) return;
+    _applyPeerReadByPeerLocally();
+  }
+
+  void _applyPeerReadByPeerLocally() {
+    final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (loaded == null) return;
+    final myId = _client.auth.currentUser?.id.trim();
+    if (myId == null || myId.isEmpty) return;
+
+    final byId = <String, ChatMessageModel>{};
+    for (final e in _serverMessagesMapFromThreadItems(loaded.items).values) {
+      byId[e.message.id] = e.message;
+    }
+
+    for (final cursorId in _peerLastReadByUserId.values) {
+      final id = cursorId?.trim();
+      if (id == null || id.isEmpty) continue;
+      if (!byId.containsKey(id)) {
+        _scheduleDebouncedFullRefresh();
+        return;
+      }
+    }
+
+    var any = false;
+    final nextItems = loaded.items.map((it) {
+      return it.map(
+        server: (s) {
+          final nm = _patchOutgoingReadPeer(s.data.message, myId, byId);
+          if (identical(nm, s.data.message)) return it;
+          any = true;
+          return ChatThreadItem.server(s.data.copyWith(message: nm));
+        },
+        optimisticText: (o) {
+          final srv = o.server;
+          if (srv == null) return it;
+          final nm = _patchOutgoingReadPeer(srv.message, myId, byId);
+          if (identical(nm, srv.message)) return it;
+          any = true;
+          return o.copyWith(server: srv.copyWith(message: nm));
+        },
+        optimisticAttachments: (o) {
+          final srv = o.server;
+          if (srv == null) return it;
+          final nm = _patchOutgoingReadPeer(srv.message, myId, byId);
+          if (identical(nm, srv.message)) return it;
+          any = true;
+          return o.copyWith(server: srv.copyWith(message: nm));
+        },
+      );
+    }).toList(growable: false);
+
+    if (!any) return;
+    _emitIfOpen(_withServerViewRevision(state, loaded.copyWith(items: nextItems)));
+  }
+
+  ChatMessageModel _patchOutgoingReadPeer(
+    ChatMessageModel m,
+    String myId,
+    Map<String, ChatMessageModel> byId,
+  ) {
+    if (m.senderId.trim() != myId) return m;
+    if (!_peerReadMapReady) return m;
+    final next = _readByPeerForOutgoing(m, myId, byId);
+    if (next == m.readByPeer) return m;
+    return m.copyWith(readByPeer: next);
+  }
+
+  bool _readByPeerForOutgoing(
+    ChatMessageModel m,
+    String myId,
+    Map<String, ChatMessageModel> byId,
+  ) {
+    if (_peerLastReadByUserId.isEmpty) return false;
+    for (final cursorId in _peerLastReadByUserId.values) {
+      final raw = cursorId?.trim();
+      if (raw == null || raw.isEmpty) return false;
+      final rm = byId[raw];
+      if (rm == null) return m.readByPeer;
+      if (_lexMsgStrictlyAfter(m, rm)) return false;
+    }
+    return true;
+  }
+
   void _subscribeRealtime(String conversationId) {
     _channel?.unsubscribe();
     final cid = conversationId.trim().toLowerCase();
@@ -1009,10 +1137,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         schema: 'public',
         table: 'chat_participants',
         filter: convFilter,
-        callback: (_) {
-          _debounceReload?.cancel();
-          unawaited(refresh(syncReadReceipt: false));
-        },
+        callback: _onChatParticipantsRealtimeUpdate,
       )
       ..onPostgresChanges(
         event: PostgresChangeEvent.all,
@@ -1052,6 +1177,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Future<void> close() async {
     _debounceReload?.cancel();
     _readReceiptDebounce?.cancel();
+    _peerLastReadByUserId.clear();
+    _peerReadMapReady = false;
     _pendingMessageInsertRows.clear();
     _skipRpcEnrichmentIds.clear();
     await _channel?.unsubscribe();
