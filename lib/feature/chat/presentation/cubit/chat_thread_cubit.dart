@@ -53,6 +53,12 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Timer? _safetyPoll;
   DateTime? _lastThreadRealtimeActivityAt;
 
+  /// Пока [load] ждёт `list_messages_enriched`, INSERT уже мог прийти по WS — обработаем после перехода в loaded.
+  final List<Map<String, dynamic>> _pendingMessageInsertRows = [];
+
+  /// Полная строка уже пришла broadcast-ом — не дёргаем `get_message_enriched` зря.
+  final Set<String> _skipRpcEnrichmentIds = {};
+
   ChatThreadCubit(this._repo, this._client, this._cache) : super(const ChatThreadState.initial());
 
   static String _localId() => 'local_${DateTime.now().microsecondsSinceEpoch}';
@@ -105,6 +111,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       return;
     }
     _lastThreadRealtimeActivityAt = null;
+    _pendingMessageInsertRows.clear();
+    _skipRpcEnrichmentIds.clear();
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
       final cached = await _cache.read(userId: uid, conversationId: cid);
@@ -123,6 +131,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       emit(const ChatThreadState.loading());
     }
     try {
+      _subscribeRealtime(cid);
+      _startSafetyPoll(cid);
+
       final list = await _repo.listMessages(conversationId: cid, limit: _fetchLimit);
       final current = state.maybeMap(loaded: (v) => v, orElse: () => null);
       late final List<ChatMessageEnriched> serverSnapshotForPersistence;
@@ -143,8 +154,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
         );
       }
-      _subscribeRealtime(cid);
-      _startSafetyPoll(cid);
+      _flushPendingMessageInserts(cid);
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: serverSnapshotForPersistence));
       }
@@ -578,47 +588,70 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     );
   }
 
-  /// Новое сообщение из Realtime: сначала строка WAL (как в списке чатов), затем RPC для полной строки.
-  Future<void> _mergeIncomingMessageRow(
+  void _flushPendingMessageInserts(String cid) {
+    final norm = cid.trim();
+    if (_pendingMessageInsertRows.isEmpty) return;
+    final batch = List<Map<String, dynamic>>.from(_pendingMessageInsertRows);
+    _pendingMessageInsertRows.clear();
+    for (final row in batch) {
+      final c = row['conversation_id'] ?? row['conversationId'];
+      if (c == null || c.toString().trim() != norm) continue;
+      final id = row['id'];
+      if (id == null) continue;
+      _mergeIncomingMessageRow(id.toString(), insertRow: row);
+    }
+  }
+
+  /// Новое сообщение из Realtime: мгновенно из строки WAL (как список чатов); RPC — только в фоне.
+  void _mergeIncomingMessageRow(
     String messageId, {
     Map<String, dynamic>? insertRow,
-    int attempt = 0,
-  }) async {
+  }) {
     final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
-    if (s == null) return;
-    final conversationId = s.conversationId.trim();
+    if (s == null) {
+      if (insertRow != null && insertRow.isNotEmpty) {
+        _pendingMessageInsertRows.add(Map<String, dynamic>.from(insertRow));
+      }
+      return;
+    }
 
     final fast =
         insertRow != null && insertRow.isNotEmpty ? _repo.enrichedFromRealtimeInsertRow(insertRow) : null;
+    final hadFast = fast != null;
     if (fast != null) {
-      final liveFast = state.maybeMap(loaded: (v) => v, orElse: () => null);
-      if (liveFast != null && liveFast.conversationId.trim() == conversationId) {
-        await _emitThreadWithEnrichedUpsert(fast);
-      }
+      _emitThreadWithEnrichedUpsert(fast);
     }
+
+    unawaited(_pullFullMessageAndUpsert(messageId, hadFastPreview: hadFast));
+  }
+
+  Future<void> _pullFullMessageAndUpsert(String messageId, {required bool hadFastPreview, int attempt = 0}) async {
+    final mid = messageId.trim();
+    if (_skipRpcEnrichmentIds.contains(mid)) return;
 
     var row = await _repo.getMessageEnriched(messageId);
     if (row == null && attempt == 0) {
       await Future<void>.delayed(_mergeRetryDelay);
       if (isClosed) return;
-      await _mergeIncomingMessageRow(messageId, insertRow: null, attempt: 1);
+      await _pullFullMessageAndUpsert(messageId, hadFastPreview: hadFastPreview, attempt: 1);
       return;
     }
     if (row == null) {
-      if (fast != null) return;
+      if (hadFastPreview) return;
       await refresh();
       return;
     }
 
-    if (row.message.conversationId.trim() != conversationId) return;
+    final cid = state.maybeMap(loaded: (v) => v.conversationId.trim(), orElse: () => '');
+    if (row.message.conversationId.trim() != cid.trim()) return;
 
     final live = state.maybeMap(loaded: (v) => v, orElse: () => null);
-    if (live == null || live.conversationId.trim() != conversationId) return;
+    if (live == null || live.conversationId.trim() != cid.trim()) return;
 
-    await _emitThreadWithEnrichedUpsert(row);
+    _emitThreadWithEnrichedUpsert(row);
   }
 
-  Future<void> _emitThreadWithEnrichedUpsert(ChatMessageEnriched row) async {
+  void _emitThreadWithEnrichedUpsert(ChatMessageEnriched row) {
     final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (s == null) return;
     final conversationId = s.conversationId.trim();
@@ -655,6 +688,42 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         unawaited(_repo.markRead(conversationId: conversationId, lastMessageId: row.message.id));
       }),
     );
+  }
+
+  void _markSkipRpcEnrichment(String messageId) {
+    final id = messageId.trim();
+    if (id.isEmpty) return;
+    _skipRpcEnrichmentIds.add(id);
+    unawaited(
+      Future<void>.delayed(const Duration(seconds: 4), () {
+        if (isClosed) return;
+        _skipRpcEnrichmentIds.remove(id);
+      }),
+    );
+  }
+
+  Map<String, dynamic>? _unwrapBroadcastEnrichedPayload(Map<String, dynamic> raw) {
+    if (raw['message'] is Map && raw['sender'] is Map) return raw;
+    final p = raw['payload'];
+    if (p is Map<String, dynamic>) return _unwrapBroadcastEnrichedPayload(p);
+    if (p is Map) return _unwrapBroadcastEnrichedPayload(Map<String, dynamic>.from(p));
+    final d = raw['data'];
+    if (d is Map<String, dynamic>) return _unwrapBroadcastEnrichedPayload(d);
+    if (d is Map) return _unwrapBroadcastEnrichedPayload(Map<String, dynamic>.from(d));
+    return null;
+  }
+
+  void _onBroadcastMessageEnriched(Map<String, dynamic> raw) {
+    _bumpThreadRealtimeActivity();
+    final map = _unwrapBroadcastEnrichedPayload(raw);
+    if (map == null) return;
+    try {
+      final row = ChatMessageEnriched.fromJson(map);
+      final cid = state.maybeMap(loaded: (s) => s.conversationId.trim(), orElse: () => '');
+      if (cid.isEmpty || row.message.conversationId.trim() != cid) return;
+      _markSkipRpcEnrichment(row.message.id);
+      _emitThreadWithEnrichedUpsert(row);
+    } catch (_) {}
   }
 
   void _startSafetyPoll(String conversationId) {
@@ -694,7 +763,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       if (payload.eventType == PostgresChangeEvent.insert) {
         final rawId = payload.newRecord['id'];
         if (rawId != null) {
-          unawaited(_mergeIncomingMessageRow(rawId.toString(), insertRow: payload.newRecord));
+          _mergeIncomingMessageRow(rawId.toString(), insertRow: payload.newRecord);
         }
         return;
       }
@@ -725,6 +794,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         schema: 'public',
         table: 'chat_message_post_refs',
         callback: (_) => _scheduleDebouncedFullRefresh(),
+      )
+      ..onBroadcast(
+        event: 'message_enriched',
+        callback: _onBroadcastMessageEnriched,
       );
 
     // Не bump здесь: иначе safety poll ~55 с не делает refresh — при сбое realtime/реплики
@@ -744,6 +817,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Future<void> close() async {
     _debounceReload?.cancel();
     _safetyPoll?.cancel();
+    _pendingMessageInsertRows.clear();
+    _skipRpcEnrichmentIds.clear();
     await _channel?.unsubscribe();
     return super.close();
   }
