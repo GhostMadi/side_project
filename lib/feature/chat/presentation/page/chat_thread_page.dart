@@ -8,12 +8,12 @@ import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_circular_progress_indicator.dart';
 import 'package:side_project/feature/chat/presentation/cubit/chat_thread_cubit.dart';
-import 'package:side_project/feature/chat/presentation/widget/chat_attachment_panel_sheet.dart';
 import 'package:side_project/feature/chat/presentation/models/chat_thread_item.dart';
+import 'package:side_project/feature/chat/presentation/widget/chat_attachment_panel_sheet.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_message_bubble.dart';
-import 'package:side_project/feature/chat/presentation/widget/chat_thread_message_entrance.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_thread_composer_bar.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_thread_day_header.dart';
+import 'package:side_project/feature/chat/presentation/widget/chat_thread_message_entrance.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_thread_timeline_utils.dart';
 
 @RoutePage()
@@ -92,9 +92,15 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   }
 
   void _scrollToBottomAfterFrame() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void jumpMax() {
       if (!mounted || !_scrollController.hasClients) return;
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
+
+    // Два кадра: после новых sliver maxScrollExtent обновляется не сразу.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      jumpMax();
+      WidgetsBinding.instance.addPostFrameCallback((_) => jumpMax());
     });
   }
 
@@ -109,7 +115,11 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             if (loaded == null || loaded.items.isEmpty) return false;
             final prevLoaded = prev.maybeMap(loaded: (s) => s, orElse: () => null);
             if (prevLoaded == null) return true;
-            return loaded.items.length > prevLoaded.items.length;
+            // Нельзя полагаться только на длину: при limit=50 новое сообщение
+            // сдвигает окно — счётчик тот же, но хвост другой; без скролла вниз
+            // пузырь «не виден», хотя данные уже в state.
+            if (loaded.items.length != prevLoaded.items.length) return true;
+            return loaded.items.last.stableBubbleKey != prevLoaded.items.last.stableBubbleKey;
           },
           listener: (context, state) {
             final prev = _previousBlocEmit;
@@ -125,10 +135,10 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                   _scrollToBottomAfterFrame();
                   return;
                 }
-                final grew = loaded.items.length > prevLoaded.items.length;
                 final tailChanged =
                     loaded.items.last.stableBubbleKey != prevLoaded.items.last.stableBubbleKey;
-                if (grew && tailChanged) {
+                // Анимация входа при новом хвосте — и когда окно того же размера «сдвинулось».
+                if (tailChanged) {
                   setState(() => _entranceFocusId = loaded.items.last.stableBubbleKey);
                   Future<void>.delayed(const Duration(milliseconds: 260), () {
                     if (mounted) setState(() => _entranceFocusId = null);
@@ -160,7 +170,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                             error: (m) => Center(
                               child: Text(m, style: AppTextStyle.base(14, color: AppColors.subTextColor)),
                             ),
-                            loaded: (conversationId, items, isLoadingMore, hasMore, errorMessage) {
+                            loaded: (conversationId, items, isLoadingMore, hasMore, errorMessage, _) {
                               return MediaQuery.removePadding(
                                 context: context,
                                 removeRight: true,
@@ -172,50 +182,47 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                                     return false;
                                   },
                                   child: RefreshIndicator(
-                                      onRefresh: () => context.read<ChatThreadCubit>().refresh(),
-                                      child: CustomScrollView(
-                                        controller: _scrollController,
-                                        physics: const AlwaysScrollableScrollPhysics(
-                                          parent: BouncingScrollPhysics(),
-                                        ),
-                                        slivers: [
-                                          if (isLoadingMore)
-                                            const SliverToBoxAdapter(
-                                              child: Padding(
-                                                padding: EdgeInsets.all(16),
-                                                child: Center(
-                                                  child: AppCircularProgressIndicator(
-                                                    dimension: 22,
-                                                    strokeWidth: 2,
-                                                  ),
+                                    onRefresh: () => context.read<ChatThreadCubit>().refresh(),
+                                    child: CustomScrollView(
+                                      controller: _scrollController,
+                                      physics: const AlwaysScrollableScrollPhysics(
+                                        parent: BouncingScrollPhysics(),
+                                      ),
+                                      slivers: [
+                                        if (isLoadingMore)
+                                          const SliverToBoxAdapter(
+                                            child: Padding(
+                                              padding: EdgeInsets.all(16),
+                                              child: Center(
+                                                child: AppCircularProgressIndicator(
+                                                  dimension: 22,
+                                                  strokeWidth: 2,
                                                 ),
                                               ),
                                             ),
-                                          if (items.isEmpty)
-                                            SliverFillRemaining(
-                                              hasScrollBody: false,
-                                              child: Padding(
-                                                padding: EdgeInsets.only(bottom: bottomGap),
-                                                child: Center(
-                                                  child: Text(
-                                                    'Нет сообщений',
-                                                    style: AppTextStyle.base(
-                                                      14,
-                                                      color: AppColors.subTextColor,
-                                                    ),
-                                                  ),
+                                          ),
+                                        if (items.isEmpty)
+                                          SliverFillRemaining(
+                                            hasScrollBody: false,
+                                            child: Padding(
+                                              padding: EdgeInsets.only(bottom: bottomGap),
+                                              child: Center(
+                                                child: Text(
+                                                  'Нет сообщений',
+                                                  style: AppTextStyle.base(14, color: AppColors.subTextColor),
                                                 ),
                                               ),
-                                            )
-                                          else
-                                            ..._buildDaySlivers(context, items, _entranceFocusId),
-                                          SliverPadding(
-                                            padding: EdgeInsets.only(bottom: bottomGap),
-                                            sliver: const SliverToBoxAdapter(child: SizedBox.shrink()),
-                                          ),
-                                        ],
-                                      ),
+                                            ),
+                                          )
+                                        else
+                                          ..._buildDaySlivers(context, items, _entranceFocusId),
+                                        SliverPadding(
+                                          padding: EdgeInsets.only(bottom: bottomGap),
+                                          sliver: const SliverToBoxAdapter(child: SizedBox.shrink()),
+                                        ),
+                                      ],
                                     ),
+                                  ),
                                 ),
                               );
                             },
@@ -245,11 +252,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   }
 
   /// Дни снизу вверх по времени: старые секции выше, «Сегодня» у композера; липкий заголовок — к верху экрана.
-  List<Widget> _buildDaySlivers(
-    BuildContext context,
-    List<ChatThreadItem> items,
-    String? entranceFocusId,
-  ) {
+  List<Widget> _buildDaySlivers(BuildContext context, List<ChatThreadItem> items, String? entranceFocusId) {
     if (items.isEmpty) return const [];
     final sections = splitChatItemsByDay(items);
     if (sections.isEmpty) return const [];
@@ -263,28 +266,25 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
         SliverStickyHeader(
           header: ChatThreadDayHeader(day: section.day),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, i) {
-                final item = chronological[i];
-                final animateEntrance = entranceFocusId != null &&
-                    isLastSection &&
-                    i == chronological.length - 1 &&
-                    item.stableBubbleKey == entranceFocusId;
-                return Padding(
-                  padding: EdgeInsets.fromLTRB(_bubbleInsetLeft, 0, _bubbleInsetRight, 4),
-                  child: ChatThreadMessageEntrance(
-                    key: ValueKey(item.stableBubbleKey),
-                    animate: animateEntrance,
-                    child: ChatMessageBubble(
-                      item: item,
-                      onRetryOptimistic: (localId) =>
-                          context.read<ChatThreadCubit>().retryPending(localId),
-                    ),
+            delegate: SliverChildBuilderDelegate((context, i) {
+              final item = chronological[i];
+              final animateEntrance =
+                  entranceFocusId != null &&
+                  isLastSection &&
+                  i == chronological.length - 1 &&
+                  item.stableBubbleKey == entranceFocusId;
+              return Padding(
+                padding: EdgeInsets.fromLTRB(_bubbleInsetLeft, 0, _bubbleInsetRight, 4),
+                child: ChatThreadMessageEntrance(
+                  key: ValueKey(item.stableBubbleKey),
+                  animate: animateEntrance,
+                  child: ChatMessageBubble(
+                    item: item,
+                    onRetryOptimistic: (localId) => context.read<ChatThreadCubit>().retryPending(localId),
                   ),
-                );
-              },
-              childCount: chronological.length,
-            ),
+                ),
+              );
+            }, childCount: chronological.length),
           ),
         ),
       );

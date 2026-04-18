@@ -24,6 +24,9 @@ abstract class ChatThreadState with _$ChatThreadState {
     @Default(false) bool isLoadingMore,
     @Default(true) bool hasMore,
     String? errorMessage,
+    /// Увеличивается при каждой синхронизации с сервером; иначе Bloc может не emit
+    /// при том же глубоком содержимом items (лаг RPC / то же окно из 50 сообщений).
+    @Default(0) int syncGeneration,
   }) = _ChatThreadLoaded;
   const factory ChatThreadState.error(String message) = _ChatThreadError;
 }
@@ -37,11 +40,25 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   final ChatThreadCacheStorage _cache;
 
   static const _pageSize = 50;
+  static const _openThreadPollInterval = Duration(seconds: 5);
 
   RealtimeChannel? _channel;
   Timer? _debounceReload;
+  /// Пока открыт экран чата — периодически тянем `list_messages_enriched`. Список диалогов
+  /// дергает только `list_conversations_enriched`; без этого опроса при сбое Realtime
+  /// в логах видны POST list_conversations_enriched, а лента диалога не обновляется.
+  Timer? _openThreadPoll;
 
   static String _localId() => 'local_${DateTime.now().microsecondsSinceEpoch}';
+
+  /// После синка с сервером всегда увеличиваем поколение — иначе при том же списке
+  /// сообщений [emit] игнорируется и лента не перестраивается.
+  ChatThreadState _bumpLoadedGeneration(ChatThreadState next) {
+    return next.maybeMap(
+      loaded: (l) => l.copyWith(syncGeneration: l.syncGeneration + 1),
+      orElse: () => next,
+    );
+  }
 
   Future<void> load(String conversationId) async {
     final cid = conversationId.trim();
@@ -70,17 +87,20 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       final list = await _repo.listMessages(conversationId: cid, limit: _pageSize);
       final current = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (current != null) {
-        emit(_reconcileWithOptimistic(current, list));
+        emit(_bumpLoadedGeneration(_reconcileWithOptimistic(current, list)));
       } else {
         emit(
-          ChatThreadState.loaded(
-            conversationId: cid,
-            items: list.map(ChatThreadItem.server).toList(growable: false),
-            hasMore: list.length >= _pageSize,
+          _bumpLoadedGeneration(
+            ChatThreadState.loaded(
+              conversationId: cid,
+              items: list.map(ChatThreadItem.server).toList(growable: false),
+              hasMore: list.length >= _pageSize,
+            ),
           ),
         );
       }
       _subscribeRealtime(cid);
+      _startOpenThreadPoll(cid);
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: list));
       }
@@ -100,7 +120,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (s == null) return;
     try {
       final list = await _repo.listMessages(conversationId: s.conversationId, limit: _pageSize);
-      emit(_reconcileWithOptimistic(s, list));
+      emit(_bumpLoadedGeneration(_reconcileWithOptimistic(s, list)));
       final uid = _client.auth.currentUser?.id.trim();
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: s.conversationId, messages: list));
@@ -138,6 +158,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         items: merged,
         isLoadingMore: false,
         hasMore: older.length >= _pageSize,
+        syncGeneration: s.syncGeneration + 1,
       ));
     } catch (e) {
       emit(s.copyWith(isLoadingMore: false, errorMessage: '$e'));
@@ -551,17 +572,38 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     _channel!.subscribe();
   }
 
+  void _startOpenThreadPoll(String conversationId) {
+    _openThreadPoll?.cancel();
+    final cid = conversationId.trim();
+    if (cid.isEmpty) return;
+    _openThreadPoll = Timer.periodic(_openThreadPollInterval, (_) {
+      if (isClosed) return;
+      final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (s == null || s.conversationId.trim() != cid) return;
+      unawaited(refresh());
+    });
+  }
+
   void _scheduleReload() {
     _debounceReload?.cancel();
     _debounceReload = Timer(const Duration(milliseconds: 180), () {
       if (isClosed) return;
-      unawaited(refresh());
+      unawaited(_refreshRealtimeTwiceForReaderLag());
     });
+  }
+
+  /// Realtime приходит до того, как read replica / RPC отдаёт новую строку — второй refresh добирает хвост.
+  Future<void> _refreshRealtimeTwiceForReaderLag() async {
+    await refresh();
+    await Future<void>.delayed(const Duration(milliseconds: 380));
+    if (isClosed) return;
+    await refresh();
   }
 
   @override
   Future<void> close() async {
     _debounceReload?.cancel();
+    _openThreadPoll?.cancel();
     await _channel?.unsubscribe();
     return super.close();
   }
