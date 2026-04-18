@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_circular_progress_indicator.dart';
@@ -15,26 +18,319 @@ import 'package:side_project/feature/chat/presentation/widget/chat_thread_timeli
 import 'package:side_project/feature/chat/presentation/widget/chat_voice_message_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Позиция пузырька в цепочке подряд идущих сообщений одного отправителя (как в WhatsApp).
+enum ChatBubbleChain { single, first, middle, last }
+
+ChatBubbleChain _chatBubbleChainFromFlags({required bool groupWithPrevious, required bool groupWithNext}) {
+  if (!groupWithPrevious && !groupWithNext) return ChatBubbleChain.single;
+  if (!groupWithPrevious && groupWithNext) return ChatBubbleChain.first;
+  if (groupWithPrevious && groupWithNext) return ChatBubbleChain.middle;
+  return ChatBubbleChain.last;
+}
+
+String _replyKindShortLabel(String kind) {
+  switch (kind) {
+    case 'post_ref':
+      return 'Пост';
+    case 'media':
+      return 'Медиа';
+    case 'file':
+      return 'Файл';
+    default:
+      return 'Сообщение';
+  }
+}
+
+/// Полоска «ответ на …» над телом пузырька.
+class _ReplyQuoteBar extends StatelessWidget {
+  const _ReplyQuoteBar({required this.fg, required this.title, required this.subtitle, this.onTap});
+
+  final Color fg;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    /// Без [width: double.infinity]: иначе цитата растягивает весь пузырёк до maxWidth,
+    /// и короткие ответы выглядят как одна длинная полоса на всю ширину.
+    final core = Container(
+      padding: const EdgeInsets.only(left: 9, top: 2, bottom: 2, right: 4),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: fg.withValues(alpha: 0.45), width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyle.base(12, color: fg.withValues(alpha: 0.72), fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyle.base(13, color: fg.withValues(alpha: 0.88), fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+    if (onTap == null) return core;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(6), child: core),
+    );
+  }
+}
+
+Widget? _replyQuoteFromPreview(
+  Color fg,
+  ChatReplyPreview preview, {
+  String? senderLabel,
+  void Function(String messageId)? onReferencedTap,
+}) {
+  final title = senderLabel ?? 'Ответ';
+  final sub = preview.text != null && preview.text!.trim().isNotEmpty
+      ? preview.text!.trim()
+      : _replyKindShortLabel(preview.kind);
+  return _ReplyQuoteBar(
+    fg: fg,
+    title: title,
+    subtitle: sub,
+    onTap: onReferencedTap == null ? null : () => onReferencedTap(preview.id),
+  );
+}
+
+/// Свайп для ответа: чужое сообщение — вправо; своё — влево. Горизонталь должна доминировать над вертикалью (скролл ленты).
+class _BubbleReplySwipe extends StatefulWidget {
+  const _BubbleReplySwipe({required this.isMine, required this.onReply, required this.child});
+
+  final bool isMine;
+  final VoidCallback onReply;
+  final Widget child;
+
+  @override
+  State<_BubbleReplySwipe> createState() => _BubbleReplySwipeState();
+}
+
+class _BubbleReplySwipeState extends State<_BubbleReplySwipe> with SingleTickerProviderStateMixin {
+  double _accumDx = 0;
+  double _accumDy = 0;
+  bool _horizontalIntent = false;
+
+  /// Сдвиг пузырька во время жеста (после отпускания кратко анимируется к 0).
+  double _displayShift = 0;
+
+  late AnimationController _snapCtrl;
+
+  static const double _triggerDx = 52;
+  static const double _bias = 1.12;
+  static const double _maxVisualShift = 56;
+  static const double _shiftGain = 0.62;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 220))
+      ..addListener(() {
+        if (!mounted) return;
+        final t = Curves.easeOutCubic.transform(_snapCtrl.value);
+        setState(() => _displayShift = _snapStart * (1 - t));
+      })
+      ..addStatusListener((status) {
+        if (status != AnimationStatus.completed) return;
+        if (!mounted) return;
+        _snapStart = 0;
+        _displayShift = 0;
+        setState(() {});
+      });
+  }
+
+  double _snapStart = 0;
+
+  @override
+  void dispose() {
+    _snapCtrl.dispose();
+    super.dispose();
+  }
+
+  void _resetTracking() {
+    _accumDx = 0;
+    _accumDy = 0;
+    _horizontalIntent = false;
+  }
+
+  /// Текущий горизонтальный сдвиг пузырька для отрисовки.
+  double _bubbleShiftPx() {
+    if (_snapCtrl.isAnimating) return _displayShift;
+    if (!_horizontalIntent) return 0;
+    if (!widget.isMine) {
+      if (_accumDx <= 0) return 0;
+      return math.min(_accumDx * _shiftGain, _maxVisualShift);
+    }
+    if (_accumDx >= 0) return 0;
+    return math.max(_accumDx * _shiftGain, -_maxVisualShift);
+  }
+
+  double _normProgress(double shift) => math.min(shift.abs() / _maxVisualShift, 1.0).clamp(0.0, 1.0);
+
+  bool get _triggered {
+    if (!_horizontalIntent) return false;
+    if (widget.isMine) {
+      return _accumDx <= -_triggerDx;
+    }
+    return _accumDx >= _triggerDx;
+  }
+
+  void _startSnapBack(double from) {
+    _snapCtrl.stop();
+    _snapStart = from;
+    _displayShift = from;
+    _snapCtrl.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) {
+        if (!mounted) return;
+        _snapCtrl.stop();
+        _resetTracking();
+        setState(() => _displayShift = 0);
+      },
+      onPointerMove: (e) {
+        if (!mounted || _snapCtrl.isAnimating) return;
+        _accumDx += e.delta.dx;
+        _accumDy += e.delta.dy.abs();
+        final ax = _accumDx.abs();
+        final ay = _accumDy;
+        if (ax > 10 && ax > ay * _bias) {
+          _horizontalIntent = true;
+        }
+        if (!mounted) return;
+        setState(() {});
+      },
+      onPointerUp: (_) {
+        if (!mounted || _snapCtrl.isAnimating) return;
+        final triggered = _triggered;
+        final endShift = _bubbleShiftPx();
+        if (triggered) {
+          HapticFeedback.mediumImpact();
+          widget.onReply();
+          _resetTracking();
+          if (mounted) setState(() => _displayShift = 0);
+          return;
+        }
+        _resetTracking();
+        if (endShift.abs() > 3) {
+          _startSnapBack(endShift);
+        } else if (mounted) {
+          setState(() => _displayShift = 0);
+        }
+      },
+      onPointerCancel: (_) {
+        if (!mounted) return;
+        _snapCtrl.stop();
+        final s = _bubbleShiftPx();
+        _resetTracking();
+        if (s.abs() > 3) {
+          _startSnapBack(s);
+        } else if (mounted) {
+          setState(() => _displayShift = 0);
+        }
+      },
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final shift = _bubbleShiftPx();
+          final progress = _normProgress(shift);
+          final iconSide = widget.isMine ? Alignment.centerRight : Alignment.centerLeft;
+          final pad = EdgeInsets.only(left: widget.isMine ? 0 : 10, right: widget.isMine ? 10 : 0);
+          return SizedBox(
+            width: c.maxWidth,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: Align(
+                    alignment: iconSide,
+                    child: Padding(
+                      padding: pad,
+                      child: Opacity(
+                        opacity: progress * 0.95,
+                        child: Icon(
+                          Icons.reply_rounded,
+                          size: 26 + 6 * progress,
+                          color: AppColors.primary.withValues(alpha: 0.35 + 0.35 * progress),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Transform.translate(offset: Offset(shift, 0), child: widget.child),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// Пузырёк: время и статус снизу внутри; свои — однотонный [AppColors.primary], чужие — белый с рамкой.
 class ChatMessageBubble extends StatelessWidget {
-  const ChatMessageBubble({super.key, required this.item, this.onRetryOptimistic});
+  const ChatMessageBubble({
+    super.key,
+    required this.item,
+    this.onRetryOptimistic,
+    this.onReply,
+    this.onReferencedMessageTap,
+    this.groupWithPrevious = false,
+    this.groupWithNext = false,
+  });
 
   final ChatThreadItem item;
 
   final void Function(String localId)? onRetryOptimistic;
 
+  /// Свайп по серверному сообщению (чужое — вправо, своё — влево) — черновик ответа.
+  final void Function(ChatMessageEnriched data)? onReply;
+
+  /// Тап по полоске ответа — переход к исходному сообщению в ленте (по id из [ChatReplyPreview.id]).
+  final void Function(String referencedMessageId)? onReferencedMessageTap;
+
+  /// Подряд с предыдущим сообщением того же отправителя (уменьшаем верхний зазор и скругления).
+  final bool groupWithPrevious;
+
+  /// Подряд со следующим сообщением того же отправителя.
+  final bool groupWithNext;
+
   static const _tickSize = 14.0;
-  static const _bubbleRadius = 17.0;
+
+  /// Скругление основных углов пузырька (было 17 — делаем мягче).
+  static const _bubbleRadius = 24.0;
+
+  /// Меньший угол у «хвоста» (нижний внешний угол цепочки).
+  static const _bubbleTailRadius = 10.0;
+
+  /// Углы у подряд идущих сообщений одного отправителя (середина цепочки).
+  static const _bubbleStackRadius = 12.0;
   static const _padH = 11.0;
   static const _padVTop = 8.0;
   static const _padVBottom = 4.0;
 
   static Color _tickColor(Color fg, {double a = 0.88}) => fg.withValues(alpha: a);
 
-  static Widget? _ticksOutgoing({required Color fg, required bool doubleCheck, required bool readAccent}) {
+  /// Одна галочка — на сервере / не прочитано собеседником; две яркие — только при [readAccent] (read_by_peer).
+  static Widget? _ticksOutgoing({required Color fg, required bool readAccent}) {
     final a = readAccent ? 0.92 : 0.62;
     return Icon(
-      doubleCheck ? Icons.done_all_rounded : Icons.done_rounded,
+      readAccent ? Icons.done_all_rounded : Icons.done_rounded,
       size: _tickSize,
       color: _tickColor(fg, a: a),
     );
@@ -51,7 +347,8 @@ class ChatMessageBubble extends StatelessWidget {
       case ChatOptimisticDelivery.ack:
         return Icon(Icons.done_rounded, size: _tickSize, color: _tickColor(fg, a: 0.62));
       case ChatOptimisticDelivery.synced:
-        return Icon(Icons.done_all_rounded, size: _tickSize, color: _tickColor(fg, a: 0.92));
+        // Двойная только при read_by_peer на серверной строке; здесь без server — как «ещё не прочитано».
+        return Icon(Icons.done_rounded, size: _tickSize, color: _tickColor(fg, a: 0.62));
       case ChatOptimisticDelivery.failed:
         return Icon(Icons.error_outline_rounded, size: _tickSize + 1, color: _tickColor(fg, a: 0.95));
     }
@@ -60,19 +357,26 @@ class ChatMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final myId = Supabase.instance.client.auth.currentUser?.id;
+    final chain = _chatBubbleChainFromFlags(
+      groupWithPrevious: groupWithPrevious,
+      groupWithNext: groupWithNext,
+    );
     return item.when(
       server: (data) {
         final isMine = myId != null && myId == data.message.senderId;
         final fg = isMine ? AppColors.textInverse : AppColors.textColor;
         final timeText = formatChatTime(data.message.createdAt);
 
-        /// Пока нет поля «прочитано собеседником» в API — исходящие с двойной галкой.
-        final readAppearance = isMine;
+        /// read_by_peer с бэка: остальные участники прочитали до этой строки (не факт «я открыл чат»).
         final trailing = isMine
-            ? _ticksOutgoing(fg: fg, doubleCheck: true, readAccent: readAppearance)
+            ? _ticksOutgoing(fg: fg, readAccent: data.message.readByPeer)
             : null;
 
         Widget bubble;
+        final replyHeader = data.replyPreview != null
+            ? _replyQuoteFromPreview(fg, data.replyPreview!, onReferencedTap: onReferencedMessageTap)
+            : null;
+
         if (data.message.kind == 'post_ref') {
           final text = data.postRef?.caption?.trim().isNotEmpty == true
               ? 'Пост: ${data.postRef!.caption!.trim()}'
@@ -80,6 +384,8 @@ class ChatMessageBubble extends StatelessWidget {
           bubble = _TelegramBubble(
             id: data.message.id,
             isMine: isMine,
+            chain: chain,
+            replyHeader: replyHeader,
             body: Text(
               text,
               style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
@@ -91,6 +397,8 @@ class ChatMessageBubble extends StatelessWidget {
           bubble = _TelegramBubble(
             id: data.message.id,
             isMine: isMine,
+            chain: chain,
+            replyHeader: replyHeader,
             body: _ServerAlbumAndFiles(data: data, fg: fg, heroScopeId: item.stableBubbleKey),
             timeText: timeText,
             trailing: trailing,
@@ -100,6 +408,8 @@ class ChatMessageBubble extends StatelessWidget {
           bubble = _TelegramBubble(
             id: data.message.id,
             isMine: isMine,
+            chain: chain,
+            replyHeader: replyHeader,
             body: Text(
               text.isEmpty ? '\u200b' : text,
               style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
@@ -109,90 +419,125 @@ class ChatMessageBubble extends StatelessWidget {
           );
         }
 
-        return bubble;
-      },
-      optimisticText: (localId, conversationId, text, createdAt, server, delivery) {
-        final effectiveText = server?.message.kind == 'post_ref'
-            ? (server?.postRef?.caption?.trim().isNotEmpty == true
-                  ? 'Пост: ${server!.postRef!.caption!.trim()}'
-                  : 'Пост')
-            : (server?.message.text ?? text);
-        final displayText = effectiveText.isEmpty ? '\u200b' : effectiveText;
-
-        final failed = delivery == ChatOptimisticDelivery.failed;
-        final fg = AppColors.textInverse;
-        final tick = server != null
-            ? _ticksOutgoing(fg: fg, doubleCheck: true, readAccent: true)
-            : _optimisticTrailing(delivery, fg);
-
-        final at = server?.message.createdAt ?? createdAt;
-        final timeText = formatChatTime(at);
-
-        Widget bubble = _TelegramBubble(
-          id: localId,
-          isMine: true,
-          dimmed: failed,
-          body: Text(
-            displayText,
-            style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
-          ),
-          timeText: timeText,
-          trailing: Padding(padding: const EdgeInsets.only(bottom: 1), child: tick),
-        );
-
-        if (failed && onRetryOptimistic != null) {
-          bubble = GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () => onRetryOptimistic!(localId),
-            child: bubble,
-          );
+        if (onReply != null) {
+          bubble = _BubbleReplySwipe(isMine: isMine, onReply: () => onReply!(data), child: bubble);
         }
 
         return bubble;
       },
-      optimisticAttachments: (localId, conversationId, createdAt, parts, caption, server, delivery) {
-        final failed = delivery == ChatOptimisticDelivery.failed;
-        final fg = AppColors.textInverse;
-        final tick = server != null
-            ? _ticksOutgoing(fg: fg, doubleCheck: true, readAccent: true)
-            : _optimisticTrailing(delivery, fg);
+      optimisticText:
+          (localId, conversationId, text, createdAt, server, delivery, _, quotedPreview, quotedSenderLabel) {
+            final effectiveText = server?.message.kind == 'post_ref'
+                ? (server?.postRef?.caption?.trim().isNotEmpty == true
+                      ? 'Пост: ${server!.postRef!.caption!.trim()}'
+                      : 'Пост')
+                : (server?.message.text ?? text);
+            final displayText = effectiveText.isEmpty ? '\u200b' : effectiveText;
 
-        final at = server?.message.createdAt ?? createdAt;
-        final timeText = formatChatTime(at);
+            final failed = delivery == ChatOptimisticDelivery.failed;
+            final fg = AppColors.textInverse;
+            final tick = server != null
+                ? _ticksOutgoing(fg: fg, readAccent: server.message.readByPeer)
+                : _optimisticTrailing(delivery, fg);
 
-        final body = server != null
-            ? _ServerAlbumAndFiles(data: server, fg: fg, heroScopeId: item.stableBubbleKey)
-            : _OptimisticOutgoingAlbum(parts: parts, caption: caption, fg: fg);
+            final at = server?.message.createdAt ?? createdAt;
+            final timeText = formatChatTime(at);
 
-        Widget bubble = _TelegramBubble(
-          id: localId,
-          isMine: true,
-          dimmed: failed,
-          body: body,
-          timeText: timeText,
-          trailing: Padding(padding: const EdgeInsets.only(bottom: 1), child: tick),
-        );
+            final replyHeader = quotedPreview != null
+                ? _replyQuoteFromPreview(
+                    fg,
+                    quotedPreview,
+                    senderLabel: quotedSenderLabel,
+                    onReferencedTap: onReferencedMessageTap,
+                  )
+                : null;
 
-        if (failed && onRetryOptimistic != null) {
-          bubble = GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () => onRetryOptimistic!(localId),
-            child: bubble,
-          );
-        }
+            Widget bubble = _TelegramBubble(
+              id: localId,
+              isMine: true,
+              chain: chain,
+              dimmed: failed,
+              replyHeader: replyHeader,
+              body: Text(
+                displayText,
+                style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
+              ),
+              timeText: timeText,
+              trailing: Padding(padding: const EdgeInsets.only(bottom: 1), child: tick),
+            );
 
-        return bubble;
-      },
+            if (failed && onRetryOptimistic != null) {
+              bubble = GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => onRetryOptimistic!(localId),
+                child: bubble,
+              );
+            }
+
+            return bubble;
+          },
+      optimisticAttachments:
+          (
+            localId,
+            conversationId,
+            createdAt,
+            parts,
+            caption,
+            server,
+            delivery,
+            _,
+            quotedPreview,
+            quotedSenderLabel,
+          ) {
+            final failed = delivery == ChatOptimisticDelivery.failed;
+            final fg = AppColors.textInverse;
+            final tick = server != null
+                ? _ticksOutgoing(fg: fg, readAccent: server.message.readByPeer)
+                : _optimisticTrailing(delivery, fg);
+
+            final at = server?.message.createdAt ?? createdAt;
+            final timeText = formatChatTime(at);
+
+            final body = server != null
+                ? _ServerAlbumAndFiles(data: server, fg: fg, heroScopeId: item.stableBubbleKey)
+                : _OptimisticOutgoingAlbum(parts: parts, caption: caption, fg: fg);
+
+            final replyHeader = quotedPreview != null
+                ? _replyQuoteFromPreview(
+                    fg,
+                    quotedPreview,
+                    senderLabel: quotedSenderLabel,
+                    onReferencedTap: onReferencedMessageTap,
+                  )
+                : null;
+
+            Widget bubble = _TelegramBubble(
+              id: localId,
+              isMine: true,
+              chain: chain,
+              dimmed: failed,
+              replyHeader: replyHeader,
+              body: body,
+              timeText: timeText,
+              trailing: Padding(padding: const EdgeInsets.only(bottom: 1), child: tick),
+            );
+
+            if (failed && onRetryOptimistic != null) {
+              bubble = GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => onRetryOptimistic!(localId),
+                child: bubble,
+              );
+            }
+
+            return bubble;
+          },
     );
   }
 }
 
 class _OptimisticOutgoingAlbum extends StatelessWidget {
-  const _OptimisticOutgoingAlbum({
-    required this.parts,
-    required this.caption,
-    required this.fg,
-  });
+  const _OptimisticOutgoingAlbum({required this.parts, required this.caption, required this.fg});
 
   final List<ChatOptimisticOutgoingPart> parts;
   final String? caption;
@@ -214,11 +559,7 @@ class _OptimisticOutgoingAlbum extends StatelessWidget {
       return ColoredBox(
         color: AppColors.iconMuted.withValues(alpha: 0.28),
         child: Center(
-          child: Icon(
-            Icons.play_circle_fill_rounded,
-            color: fg.withValues(alpha: 0.95),
-            size: 36,
-          ),
+          child: Icon(Icons.play_circle_fill_rounded, color: fg.withValues(alpha: 0.95), size: 36),
         ),
       );
     }
@@ -242,11 +583,16 @@ class _OptimisticOutgoingAlbum extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 260),
             child: AspectRatio(
               aspectRatio: 1,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: _thumb(visuals[0]),
-              ),
+              child: ClipRRect(borderRadius: BorderRadius.circular(12), child: _thumb(visuals[0])),
             ),
+          )
+        else if (visuals.length >= 3 && visuals.length.isOdd)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 260),
+            child: _albumOddVisualCountLayout([
+              for (final p in visuals)
+                ClipRRect(borderRadius: BorderRadius.circular(12), child: _thumb(p)),
+            ]),
           )
         else if (visuals.length > 1)
           ConstrainedBox(
@@ -262,10 +608,8 @@ class _OptimisticOutgoingAlbum extends StatelessWidget {
                 childAspectRatio: 1,
               ),
               itemCount: visuals.length,
-              itemBuilder: (_, i) => ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: _thumb(visuals[i]),
-              ),
+              itemBuilder: (_, i) =>
+                  ClipRRect(borderRadius: BorderRadius.circular(12), child: _thumb(visuals[i])),
             ),
           ),
         ...audios.asMap().entries.map(
@@ -340,18 +684,94 @@ class _TelegramBubble extends StatelessWidget {
   const _TelegramBubble({
     required this.id,
     required this.isMine,
+    required this.chain,
     required this.body,
     required this.timeText,
+    this.replyHeader,
     this.trailing,
     this.dimmed = false,
   });
 
   final String id;
   final bool isMine;
+  final ChatBubbleChain chain;
   final Widget body;
   final String timeText;
+  final Widget? replyHeader;
   final Widget? trailing;
   final bool dimmed;
+
+  static BorderRadius _radiusMine(ChatBubbleChain c) {
+    const r = ChatMessageBubble._bubbleRadius;
+    const tail = ChatMessageBubble._bubbleTailRadius;
+    const stack = ChatMessageBubble._bubbleStackRadius;
+    switch (c) {
+      case ChatBubbleChain.single:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(r),
+          topRight: Radius.circular(r),
+          bottomLeft: Radius.circular(r),
+          bottomRight: Radius.circular(tail),
+        );
+      case ChatBubbleChain.first:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(r),
+          topRight: Radius.circular(r),
+          bottomLeft: Radius.circular(r),
+          bottomRight: Radius.circular(stack),
+        );
+      case ChatBubbleChain.middle:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(stack),
+          topRight: Radius.circular(stack),
+          bottomLeft: Radius.circular(stack),
+          bottomRight: Radius.circular(stack),
+        );
+      case ChatBubbleChain.last:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(stack),
+          topRight: Radius.circular(stack),
+          bottomLeft: Radius.circular(r),
+          bottomRight: Radius.circular(tail),
+        );
+    }
+  }
+
+  static BorderRadius _radiusTheirs(ChatBubbleChain c) {
+    const r = ChatMessageBubble._bubbleRadius;
+    const tail = ChatMessageBubble._bubbleTailRadius;
+    const stack = ChatMessageBubble._bubbleStackRadius;
+    switch (c) {
+      case ChatBubbleChain.single:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(r),
+          topRight: Radius.circular(r),
+          bottomRight: Radius.circular(r),
+          bottomLeft: Radius.circular(tail),
+        );
+      case ChatBubbleChain.first:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(r),
+          topRight: Radius.circular(r),
+          bottomRight: Radius.circular(stack),
+          bottomLeft: Radius.circular(stack),
+        );
+      case ChatBubbleChain.middle:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(stack),
+          topRight: Radius.circular(stack),
+          bottomRight: Radius.circular(stack),
+          bottomLeft: Radius.circular(stack),
+        );
+      case ChatBubbleChain.last:
+        return const BorderRadius.only(
+          topLeft: Radius.circular(stack),
+          topRight: Radius.circular(stack),
+          bottomRight: Radius.circular(r),
+          bottomLeft: Radius.circular(tail),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -365,10 +785,12 @@ class _TelegramBubble extends StatelessWidget {
       fontWeight: FontWeight.w500,
     );
 
+    final quote = replyHeader;
     final inner = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
+        if (quote != null) ...[quote, const SizedBox(height: 6)],
         body,
         const SizedBox(height: 2),
         Row(
@@ -391,17 +813,15 @@ class _TelegramBubble extends StatelessWidget {
       child: inner,
     );
 
+    final topPad = chain == ChatBubbleChain.single || chain == ChatBubbleChain.first ? 3.0 : 1.0;
+    final bottomPad = chain == ChatBubbleChain.single || chain == ChatBubbleChain.last ? 3.0 : 1.0;
+
     late final Widget shell;
     if (isMine) {
       shell = Container(
         decoration: BoxDecoration(
           color: dimmed ? AppColors.primary.withValues(alpha: 0.55) : AppColors.primary,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(ChatMessageBubble._bubbleRadius),
-            topRight: Radius.circular(ChatMessageBubble._bubbleRadius),
-            bottomLeft: Radius.circular(ChatMessageBubble._bubbleRadius),
-            bottomRight: Radius.circular(6),
-          ),
+          borderRadius: _radiusMine(chain),
           boxShadow: [
             BoxShadow(
               color: AppColors.primary.withValues(alpha: dimmed ? 0.06 : 0.12),
@@ -416,12 +836,7 @@ class _TelegramBubble extends StatelessWidget {
       shell = Container(
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(ChatMessageBubble._bubbleRadius),
-            topRight: Radius.circular(ChatMessageBubble._bubbleRadius),
-            bottomRight: Radius.circular(ChatMessageBubble._bubbleRadius),
-            bottomLeft: Radius.circular(6),
-          ),
+          borderRadius: _radiusTheirs(chain),
           border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
           boxShadow: [
             BoxShadow(
@@ -447,7 +862,7 @@ class _TelegramBubble extends StatelessWidget {
         );
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+        padding: EdgeInsets.only(top: topPad, bottom: bottomPad),
         child: Row(
           mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
@@ -464,12 +879,42 @@ class _TelegramBubble extends StatelessWidget {
   }
 }
 
+/// Нечётное число медиа ≥3: первые n−1 в сетке 2 колонки, последнее на всю ширину снизу (без «дыры» в последней строке).
+Widget _albumOddVisualCountLayout(List<Widget> cells) {
+  assert(cells.length >= 3 && cells.length.isOdd);
+  final n = cells.length;
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final w = constraints.maxWidth;
+      const gap = 4.0;
+      final side = (w - gap) / 2;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GridView.builder(
+            padding: EdgeInsets.zero,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: gap,
+              mainAxisSpacing: gap,
+              childAspectRatio: 1,
+            ),
+            itemCount: n - 1,
+            itemBuilder: (_, i) => cells[i],
+          ),
+          SizedBox(height: gap),
+          SizedBox(width: w, height: side, child: cells[n - 1]),
+        ],
+      );
+    },
+  );
+}
+
 class _ServerAlbumAndFiles extends StatelessWidget {
-  const _ServerAlbumAndFiles({
-    required this.data,
-    required this.fg,
-    required this.heroScopeId,
-  });
+  const _ServerAlbumAndFiles({required this.data, required this.fg, required this.heroScopeId});
 
   final ChatMessageEnriched data;
   final Color fg;
@@ -557,10 +1002,24 @@ class _ServerAlbumAndFiles extends StatelessWidget {
             child: AspectRatio(
               aspectRatio: 1,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 child: wrapTap(index: 0, child: _AttachmentThumb(att: visuals[0])),
               ),
             ),
+          )
+        else if (visuals.length >= 3 && visuals.length.isOdd)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 260),
+            child: _albumOddVisualCountLayout([
+              for (var i = 0; i < visuals.length; i++)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: wrapTap(
+                    index: i,
+                    child: _AttachmentThumb(att: visuals[i]),
+                  ),
+                ),
+            ]),
           )
         else if (visuals.length > 1)
           ConstrainedBox(
@@ -577,7 +1036,7 @@ class _ServerAlbumAndFiles extends StatelessWidget {
               ),
               itemCount: visuals.length,
               itemBuilder: (_, i) => ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 child: wrapTap(
                   index: i,
                   child: _AttachmentThumb(att: visuals[i]),
@@ -646,7 +1105,7 @@ class _AttachmentThumb extends StatelessWidget {
     return AppProgressiveNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(12),
     );
   }
 }

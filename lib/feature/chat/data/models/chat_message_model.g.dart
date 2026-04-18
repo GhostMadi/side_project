@@ -23,6 +23,7 @@ _ChatMessageModel _$ChatMessageModelFromJson(Map<String, dynamic> json) =>
       deletedAt: json['deleted_at'] == null
           ? null
           : DateTime.parse(json['deleted_at'] as String),
+      readByPeer: json['read_by_peer'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$ChatMessageModelToJson(_ChatMessageModel instance) =>
@@ -38,4 +39,5 @@ Map<String, dynamic> _$ChatMessageModelToJson(_ChatMessageModel instance) =>
       'created_at': instance.createdAt.toIso8601String(),
       'edited_at': instance.editedAt?.toIso8601String(),
       'deleted_at': instance.deletedAt?.toIso8601String(),
+      'read_by_peer': instance.readByPeer,
     };

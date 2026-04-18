@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,7 +9,10 @@ import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_circular_progress_indicator.dart';
+import 'package:side_project/core/shared/app_refresh.dart';
+import 'package:side_project/feature/chat/data/models/chat_message_enriched.dart';
 import 'package:side_project/feature/chat/presentation/cubit/chat_thread_cubit.dart';
+import 'package:side_project/feature/chat/presentation/models/chat_outgoing_reply_draft.dart';
 import 'package:side_project/feature/chat/presentation/models/chat_thread_item.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_attachment_panel_sheet.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_message_bubble.dart';
@@ -15,6 +20,7 @@ import 'package:side_project/feature/chat/presentation/widget/chat_thread_compos
 import 'package:side_project/feature/chat/presentation/widget/chat_thread_day_header.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_thread_message_entrance.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_thread_timeline_utils.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 @RoutePage()
 class ChatThreadPage extends StatefulWidget {
@@ -31,11 +37,46 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   final GlobalKey<ChatThreadComposerBarState> _composerKey = GlobalKey<ChatThreadComposerBarState>();
   final ScrollController _scrollController = ScrollController();
 
+  /// Якоря строк для перехода к сообщению по тапу на цитату ответа (`Scrollable.ensureVisible`).
+  final Map<String, GlobalKey> _messageAnchorKeys = {};
+
+  GlobalKey _anchorFor(String stableBubbleKey) =>
+      _messageAnchorKeys.putIfAbsent(stableBubbleKey, GlobalKey.new);
+
+  void _scrollToReferencedMessage(String referencedMessageId) {
+    final id = referencedMessageId.trim();
+    if (id.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final ctx = _messageAnchorKeys[id]?.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+        alignment: 0.35,
+      );
+    });
+  }
+
   /// Предыдущее состояние cubit для сравнения хвоста списка в listener.
   ChatThreadState? _previousBlocEmit;
 
+  /// Pull-to-refresh: не дёргать скролл и анимацию хвоста в [BlocListener].
+  bool _suppressListenerScroll = false;
+
   /// Хвост сообщения, для которого показываем входящую анимацию один раз.
   String? _entranceFocusId;
+
+  /// Ответ на сообщение (панель над композером).
+  ChatOutgoingReplyDraft? _replyDraft;
+
+  void _clearReplyDraft() => setState(() => _replyDraft = null);
+
+  void _onReplyToMessage(ChatMessageEnriched data) {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    setState(() => _replyDraft = ChatOutgoingReplyDraft.fromEnriched(data, myId));
+  }
 
   /// Чаты: скролл как обычно (старые сверху), липкая дата цепляется к верху экрана.
   /// Горизонтальные отступы ленты от краёв экрана.
@@ -59,6 +100,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   void didUpdateWidget(ChatThreadPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.conversationId != widget.conversationId) {
+      _messageAnchorKeys.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -112,16 +154,15 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             final loaded = cur.maybeMap(loaded: (s) => s, orElse: () => null);
             if (loaded == null || loaded.items.isEmpty) return false;
             final prevLoaded = prev.maybeMap(loaded: (s) => s, orElse: () => null);
-            if (prevLoaded == null) return true;
-            // Нельзя полагаться только на длину: при скользящем окне новое сообщение
-            // сдвигает окно — счётчик тот же, но хвост другой; без скролла вниз
-            // пузырь «не виден», хотя данные уже в state.
-            if (loaded.items.length != prevLoaded.items.length) return true;
+            if (prevLoaded == null || prevLoaded.items.isEmpty) return true;
+            // Новый хвост (сообщение снизу). Подгрузка истории меняет только начало списка —
+            // last не меняется, слушатель молчит — без скролла вниз и без «перерисовки всей страницы».
             return loaded.items.last.stableBubbleKey != prevLoaded.items.last.stableBubbleKey;
           },
           listener: (context, state) {
             final prev = _previousBlocEmit;
             _previousBlocEmit = state;
+            if (_suppressListenerScroll) return;
             state.maybeMap(
               loaded: (loaded) {
                 if (loaded.items.isEmpty) {
@@ -135,16 +176,15 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                 }
                 final tailChanged =
                     loaded.items.last.stableBubbleKey != prevLoaded.items.last.stableBubbleKey;
-                // Анимация входа при новом хвосте — и когда окно того же размера «сдвинулось».
                 if (tailChanged) {
                   setState(() => _entranceFocusId = loaded.items.last.stableBubbleKey);
                   Future<void>.delayed(const Duration(milliseconds: 260), () {
                     if (mounted) setState(() => _entranceFocusId = null);
                   });
+                  _scrollToBottomAfterFrame();
                 }
-                _scrollToBottomAfterFrame();
               },
-              orElse: () => _scrollToBottomAfterFrame(),
+              orElse: () {},
             );
           },
           child: Scaffold(
@@ -156,7 +196,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
             body: Builder(
               builder: (context) {
                 final bottomGap = MediaQuery.viewPaddingOf(context).bottom + 70;
-                return Stack(
+                return _ChatThreadResumeSync(
+                  child: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     Positioned.fill(
@@ -179,26 +220,23 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                                     }
                                     return false;
                                   },
-                                  child: RefreshIndicator(
-                                    onRefresh: () => context.read<ChatThreadCubit>().refresh(),
+                                  child: AppRefresh(
+                                    onRefresh: () async {
+                                      _suppressListenerScroll = true;
+                                      try {
+                                        await context
+                                            .read<ChatThreadCubit>()
+                                            .refresh(syncReadReceipt: true);
+                                      } finally {
+                                        _suppressListenerScroll = false;
+                                      }
+                                    },
                                     child: CustomScrollView(
                                       controller: _scrollController,
                                       physics: const AlwaysScrollableScrollPhysics(
                                         parent: BouncingScrollPhysics(),
                                       ),
                                       slivers: [
-                                        if (isLoadingMore)
-                                          const SliverToBoxAdapter(
-                                            child: Padding(
-                                              padding: EdgeInsets.all(16),
-                                              child: Center(
-                                                child: AppCircularProgressIndicator(
-                                                  dimension: 22,
-                                                  strokeWidth: 2,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
                                         if (items.isEmpty)
                                           SliverFillRemaining(
                                             hasScrollBody: false,
@@ -229,6 +267,26 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                       ),
                     ),
                     Positioned(
+                      top: 8,
+                      left: 0,
+                      right: 0,
+                      child: BlocBuilder<ChatThreadCubit, ChatThreadState>(
+                        buildWhen: (p, c) =>
+                            p.maybeMap(loaded: (a) => a.isLoadingMore, orElse: () => false) !=
+                            c.maybeMap(loaded: (b) => b.isLoadingMore, orElse: () => false),
+                        builder: (context, state) {
+                          final loadingMore =
+                              state.maybeMap(loaded: (s) => s.isLoadingMore, orElse: () => false);
+                          if (!loadingMore) return const SizedBox.shrink();
+                          return const IgnorePointer(
+                            child: Center(
+                              child: AppCircularProgressIndicator(dimension: 22, strokeWidth: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Positioned(
                       left: 0,
                       right: 0,
                       bottom: 0,
@@ -237,9 +295,12 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                         controller: _composer,
                         conversationId: widget.conversationId,
                         showAttachmentChooser: _showAttachmentChooser,
+                        replyDraft: _replyDraft,
+                        onClearReplyDraft: _clearReplyDraft,
                       ),
                     ),
                   ],
+                ),
                 );
               },
             ),
@@ -266,19 +327,37 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate((context, i) {
               final item = chronological[i];
+              final myId = Supabase.instance.client.auth.currentUser?.id;
+              final curKey = item.groupSenderKey(myId);
+              final prevKey = i > 0 ? chronological[i - 1].groupSenderKey(myId) : null;
+              final nextKey =
+                  i + 1 < chronological.length ? chronological[i + 1].groupSenderKey(myId) : null;
+              final groupWithPrevious =
+                  prevKey != null && curKey != null && prevKey.isNotEmpty && prevKey == curKey;
+              final groupWithNext =
+                  nextKey != null && curKey != null && nextKey.isNotEmpty && nextKey == curKey;
               final animateEntrance =
                   entranceFocusId != null &&
                   isLastSection &&
                   i == chronological.length - 1 &&
                   item.stableBubbleKey == entranceFocusId;
               return Padding(
-                padding: EdgeInsets.fromLTRB(_bubbleInsetLeft, 0, _bubbleInsetRight, 4),
+                padding: EdgeInsets.fromLTRB(
+                  _bubbleInsetLeft,
+                  groupWithPrevious ? 0 : 2,
+                  _bubbleInsetRight,
+                  groupWithNext ? 1 : 4,
+                ),
                 child: ChatThreadMessageEntrance(
-                  key: ValueKey(item.stableBubbleKey),
+                  key: _anchorFor(item.stableBubbleKey),
                   animate: animateEntrance,
                   child: ChatMessageBubble(
                     item: item,
+                    groupWithPrevious: groupWithPrevious,
+                    groupWithNext: groupWithNext,
                     onRetryOptimistic: (localId) => context.read<ChatThreadCubit>().retryPending(localId),
+                    onReply: _onReplyToMessage,
+                    onReferencedMessageTap: _scrollToReferencedMessage,
                   ),
                 ),
               );
@@ -289,4 +368,41 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
     }
     return out;
   }
+}
+
+/// `refresh` при возврате в приложение (без периодического poll — только realtime + это).
+class _ChatThreadResumeSync extends StatefulWidget {
+  const _ChatThreadResumeSync({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ChatThreadResumeSync> createState() => _ChatThreadResumeSyncState();
+}
+
+class _ChatThreadResumeSyncState extends State<_ChatThreadResumeSync> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state != AppLifecycleState.resumed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(context.read<ChatThreadCubit>().refresh(syncReadReceipt: true));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

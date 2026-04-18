@@ -18,6 +18,9 @@ abstract class ChatMessageModel with _$ChatMessageModel {
     @JsonKey(name: 'created_at') required DateTime createdAt,
     @JsonKey(name: 'edited_at') DateTime? editedAt,
     @JsonKey(name: 'deleted_at') DateTime? deletedAt,
+
+    /// Выставляется в RPC: все остальные участники прочитали до этой строки (не «я открыл чат»).
+    @JsonKey(name: 'read_by_peer') @Default(false) bool readByPeer,
   }) = _ChatMessageModel;
 
   factory ChatMessageModel.fromJson(Map<String, dynamic> json) => _$ChatMessageModelFromJson(json);

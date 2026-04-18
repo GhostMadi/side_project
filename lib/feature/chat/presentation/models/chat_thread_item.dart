@@ -18,6 +18,11 @@ class ChatThreadItem with _$ChatThreadItem {
     required DateTime createdAt,
     ChatMessageEnriched? server,
     @Default(ChatOptimisticDelivery.sending) ChatOptimisticDelivery delivery,
+
+    /// [send_message(..., p_reply_to)] и превью цитаты в пузырьке до прихода с сервера.
+    String? replyToMessageId,
+    ChatReplyPreview? quotedPreview,
+    String? quotedSenderLabel,
   }) = _ChatThreadOptimisticText;
 
   /// Фото / видео / файлы / голос — сразу в ленте; байты для превью.[server] после синка с API.
@@ -29,15 +34,29 @@ class ChatThreadItem with _$ChatThreadItem {
     String? caption,
     ChatMessageEnriched? server,
     @Default(ChatOptimisticDelivery.sending) ChatOptimisticDelivery delivery,
+    String? replyToMessageId,
+    ChatReplyPreview? quotedPreview,
+    String? quotedSenderLabel,
   }) = _ChatThreadOptimisticAttachments;
 }
 
 extension ChatThreadItemBubbleKeyX on ChatThreadItem {
   /// Стабильный ключ строки в списке (серверный id или локальный optimistic id).
   String get stableBubbleKey => when(
-        server: (data) => data.message.id,
-        optimisticText: (localId, conversationId, text, createdAt, server, delivery) => localId,
-        optimisticAttachments: (localId, conversationId, createdAt, parts, caption, server, delivery) => localId,
-      );
+    server: (data) => data.message.id,
+    optimisticText: (localId, conversationId, text, createdAt, server, delivery, _, ___, ____) => localId,
+    optimisticAttachments:
+        (localId, conversationId, createdAt, parts, caption, server, delivery, _, ___, ____) => localId,
+  );
 }
 
+extension ChatThreadItemGroupX on ChatThreadItem {
+  /// Идентификатор отправителя для группировки подряд идущих пузырьков.
+  /// [myUserId] — для optimistic-сообщений считаем отправителем текущего пользователя.
+  String? groupSenderKey(String? myUserId) => when(
+    server: (data) => data.message.senderId,
+    optimisticText: (_, __, ___, ____, _____, ______, _______, __________, ___________) => myUserId,
+    optimisticAttachments: (_, __, ___, ____, _____, ______, _______, ________, _________, __________) =>
+        myUserId,
+  );
+}

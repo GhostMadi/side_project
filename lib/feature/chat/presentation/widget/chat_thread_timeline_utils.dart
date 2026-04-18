@@ -22,8 +22,11 @@ DateTime _asLocalDay(DateTime t) {
 DateTime? _itemTime(ChatThreadItem item) {
   return item.when(
     server: (d) => d.message.createdAt.toLocal(),
-    optimisticText: (_, __, ___, createdAt, ____, _____) => createdAt.toLocal(),
-    optimisticAttachments: (_, __, createdAt, ___, ____, _____, ______) => createdAt.toLocal(),
+    optimisticText: (_, __, ___, createdAt, ____, _____, ______, _______, __________) =>
+        createdAt.toLocal(),
+    optimisticAttachments:
+        (_, __, createdAt, ___, ____, _____, ______, _______, __________, ___________) =>
+            createdAt.toLocal(),
   );
 }
 

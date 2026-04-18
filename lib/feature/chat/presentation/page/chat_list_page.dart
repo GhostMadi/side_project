@@ -7,6 +7,7 @@ import 'package:side_project/core/resources/icons/app_icons.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_circular_progress_indicator.dart';
+import 'package:side_project/core/shared/app_refresh.dart';
 import 'package:side_project/feature/chat/data/models/chat_conversation_enriched.dart';
 import 'package:side_project/feature/chat/presentation/cubit/chat_conversations_list_cubit.dart';
 import 'package:side_project/feature/chat/presentation/widget/chat_conversation_tile.dart';
@@ -90,7 +91,7 @@ class _ChatListShell extends StatelessWidget {
       );
     }
 
-    final scrollable = canRefresh ? RefreshIndicator(onRefresh: refresh, child: body) : body;
+    final scrollable = canRefresh ? AppRefresh(onRefresh: refresh, child: body) : body;
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),

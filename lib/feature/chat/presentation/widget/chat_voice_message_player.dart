@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -30,7 +31,7 @@ final class ChatVoicePlaybackHub {
   }
 }
 
-/// Голосовое сообщение в стиле Telegram/WhatsApp: круглая кнопка play, полоса прогресса, время.
+/// Голосовое сообщение в стиле WhatsApp: play, дорожка из полосок (waveform), время справа с отступом.
 class ChatVoiceMessagePlayer extends StatefulWidget {
   const ChatVoiceMessagePlayer({
     super.key,
@@ -55,15 +56,70 @@ class ChatVoiceMessagePlayer extends StatefulWidget {
   State<ChatVoiceMessagePlayer> createState() => _ChatVoiceMessagePlayerState();
 }
 
+class _VoiceWaveformPainter extends CustomPainter {
+  _VoiceWaveformPainter({
+    required this.heights,
+    required this.progress,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.gap,
+    required this.maxBarHeight,
+  });
+
+  final List<double> heights;
+  final double progress;
+  final Color activeColor;
+  final Color inactiveColor;
+  final double gap;
+  final double maxBarHeight;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = heights.length;
+    if (n == 0 || size.width <= 0) return;
+    final totalGap = gap * (n - 1);
+    final barW = max(1.2, (size.width - totalGap) / n);
+    final cy = size.height / 2;
+    var x = 0.0;
+    for (var i = 0; i < n; i++) {
+      final t = (i + 0.5) / n;
+      final fill = t <= progress;
+      final h = heights[i].clamp(0.08, 1.0) * maxBarHeight;
+      final paint = Paint()
+        ..color = fill ? activeColor : inactiveColor
+        ..strokeCap = StrokeCap.round;
+      final top = cy - h / 2;
+      final rr = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, top, barW, h),
+        Radius.circular(barW / 2),
+      );
+      canvas.drawRRect(rr, paint);
+      x += barW + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VoiceWaveformPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.heights != heights ||
+        oldDelegate.activeColor != activeColor ||
+        oldDelegate.inactiveColor != inactiveColor;
+  }
+}
+
 class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
   late final AudioPlayer _player = AudioPlayer();
   File? _tempFile;
   bool _loadingSource = true;
   bool _failed = false;
+  late final List<double> _barHeights;
 
   @override
   void initState() {
     super.initState();
+    final seed = widget.networkUrl?.hashCode ?? widget.memoryBytes?.hashCode ?? 0;
+    final rnd = Random(seed ^ 0x51a7beef);
+    _barHeights = List.generate(44, (_) => 0.22 + rnd.nextDouble() * 0.78);
     unawaited(_bindSource());
   }
 
@@ -122,6 +178,21 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
     if (mounted) setState(() {});
   }
 
+  void _seekFromLocalX(double dx, double width) {
+    if (_loadingSource || _failed || width <= 0) return;
+    final r = (dx / width).clamp(0.0, 1.0);
+    unawaited(_seekProgress(r));
+  }
+
+  Future<void> _seekProgress(double r) async {
+    var ms = _player.duration?.inMilliseconds ?? 0;
+    if (ms <= 0 && widget.durationMsHint != null) {
+      ms = widget.durationMsHint!;
+    }
+    if (ms <= 0) return;
+    await _player.seek(Duration(milliseconds: (r * ms).round()));
+  }
+
   static String _fmt(Duration d) {
     final totalSec = d.inSeconds;
     final m = totalSec ~/ 60;
@@ -142,6 +213,8 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
     }
 
     final hint = widget.durationMsHint != null ? Duration(milliseconds: widget.durationMsHint!) : null;
+    final activeWave = widget.fg.withValues(alpha: 0.92);
+    final inactiveWave = widget.fg.withValues(alpha: 0.32);
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
@@ -189,39 +262,43 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
                 builder: (_, durSnap) {
                   final dur = durSnap.data ?? Duration.zero;
                   final totalMs = dur.inMilliseconds > 0 ? dur.inMilliseconds : (hint?.inMilliseconds ?? 0);
-                  final maxSec = totalMs > 0 ? totalMs / 1000.0 : 1.0;
                   return StreamBuilder<Duration>(
                     stream: _player.positionStream,
                     builder: (_, posSnap) {
                       final pos = posSnap.data ?? Duration.zero;
-                      final curSec = pos.inMilliseconds / 1000.0;
-                      return SliderTheme(
-                        data: SliderThemeData(
-                          trackHeight: 3,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                          overlayShape: SliderComponentShape.noOverlay,
-                          activeTrackColor: widget.fg.withValues(alpha: 0.88),
-                          inactiveTrackColor: widget.fg.withValues(alpha: 0.28),
-                          thumbColor: widget.fg.withValues(alpha: 0.98),
-                        ),
-                        child: Slider(
-                          value: curSec.clamp(0.0, maxSec),
-                          max: maxSec,
-                          onChanged: _loadingSource
-                              ? null
-                              : (v) {
-                                  unawaited(_player.seek(Duration(milliseconds: (v * 1000).round())));
-                                },
-                        ),
+                      final progress = totalMs > 0 ? (pos.inMilliseconds / totalMs).clamp(0.0, 1.0) : 0.0;
+                      return LayoutBuilder(
+                        builder: (_, bc) {
+                          final w = bc.maxWidth;
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (d) => _seekFromLocalX(d.localPosition.dx, w),
+                            onHorizontalDragUpdate: (d) => _seekFromLocalX(d.localPosition.dx, w),
+                            child: SizedBox(
+                              height: 34,
+                              width: w,
+                              child: CustomPaint(
+                                painter: _VoiceWaveformPainter(
+                                  heights: _barHeights,
+                                  progress: progress,
+                                  activeColor: activeWave,
+                                  inactiveColor: inactiveWave,
+                                  gap: 2,
+                                  maxBarHeight: 28,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   );
                 },
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 12),
             SizedBox(
-              width: 76,
+              width: 48,
               child: StreamBuilder<Duration>(
                 stream: _player.durationStream.map((d) => d ?? Duration.zero),
                 initialData: hint ?? Duration.zero,
@@ -236,30 +313,19 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
                         stream: _player.playerStateStream,
                         builder: (_, ps) {
                           final playing = ps.data?.playing ?? false;
-                          if (!playing && pos == Duration.zero) {
-                            return Text(
-                              total.inMilliseconds > 0 ? _fmt(total) : '…',
-                              textAlign: TextAlign.end,
-                              maxLines: 1,
-                              overflow: TextOverflow.fade,
-                              softWrap: false,
-                              style: AppTextStyle.base(
-                                12,
-                                color: widget.fg.withValues(alpha: 0.78),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            );
-                          }
+                          final text = (!playing && pos == Duration.zero)
+                              ? (total.inMilliseconds > 0 ? _fmt(total) : '…')
+                              : '${_fmt(pos)} / ${_fmt(total)}';
                           return Text(
-                            '${_fmt(pos)} · ${_fmt(total)}',
-                            textAlign: TextAlign.end,
+                            text,
+                            textAlign: TextAlign.right,
                             maxLines: 1,
                             overflow: TextOverflow.fade,
                             softWrap: false,
                             style: AppTextStyle.base(
-                              11,
-                              color: widget.fg.withValues(alpha: 0.72),
-                              fontWeight: FontWeight.w500,
+                              !playing && pos == Duration.zero ? 12 : 11,
+                              color: widget.fg.withValues(alpha: !playing && pos == Duration.zero ? 0.78 : 0.72),
+                              fontWeight: FontWeight.w600,
                             ),
                           );
                         },

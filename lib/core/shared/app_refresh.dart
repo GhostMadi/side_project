@@ -39,4 +39,3 @@ class AppRefresh extends StatelessWidget {
     );
   }
 }
-

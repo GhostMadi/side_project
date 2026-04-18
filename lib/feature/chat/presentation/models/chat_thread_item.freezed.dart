@@ -125,12 +125,12 @@ return optimisticAttachments(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( ChatMessageEnriched data)?  server,TResult Function( String localId,  String conversationId,  String text,  DateTime createdAt,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery)?  optimisticText,TResult Function( String localId,  String conversationId,  DateTime createdAt,  List<ChatOptimisticOutgoingPart> parts,  String? caption,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery)?  optimisticAttachments,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( ChatMessageEnriched data)?  server,TResult Function( String localId,  String conversationId,  String text,  DateTime createdAt,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery,  String? replyToMessageId,  ChatReplyPreview? quotedPreview,  String? quotedSenderLabel)?  optimisticText,TResult Function( String localId,  String conversationId,  DateTime createdAt,  List<ChatOptimisticOutgoingPart> parts,  String? caption,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery,  String? replyToMessageId,  ChatReplyPreview? quotedPreview,  String? quotedSenderLabel)?  optimisticAttachments,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ChatThreadServer() when server != null:
 return server(_that.data);case _ChatThreadOptimisticText() when optimisticText != null:
-return optimisticText(_that.localId,_that.conversationId,_that.text,_that.createdAt,_that.server,_that.delivery);case _ChatThreadOptimisticAttachments() when optimisticAttachments != null:
-return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,_that.parts,_that.caption,_that.server,_that.delivery);case _:
+return optimisticText(_that.localId,_that.conversationId,_that.text,_that.createdAt,_that.server,_that.delivery,_that.replyToMessageId,_that.quotedPreview,_that.quotedSenderLabel);case _ChatThreadOptimisticAttachments() when optimisticAttachments != null:
+return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,_that.parts,_that.caption,_that.server,_that.delivery,_that.replyToMessageId,_that.quotedPreview,_that.quotedSenderLabel);case _:
   return orElse();
 
 }
@@ -148,12 +148,12 @@ return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( ChatMessageEnriched data)  server,required TResult Function( String localId,  String conversationId,  String text,  DateTime createdAt,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery)  optimisticText,required TResult Function( String localId,  String conversationId,  DateTime createdAt,  List<ChatOptimisticOutgoingPart> parts,  String? caption,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery)  optimisticAttachments,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( ChatMessageEnriched data)  server,required TResult Function( String localId,  String conversationId,  String text,  DateTime createdAt,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery,  String? replyToMessageId,  ChatReplyPreview? quotedPreview,  String? quotedSenderLabel)  optimisticText,required TResult Function( String localId,  String conversationId,  DateTime createdAt,  List<ChatOptimisticOutgoingPart> parts,  String? caption,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery,  String? replyToMessageId,  ChatReplyPreview? quotedPreview,  String? quotedSenderLabel)  optimisticAttachments,}) {final _that = this;
 switch (_that) {
 case _ChatThreadServer():
 return server(_that.data);case _ChatThreadOptimisticText():
-return optimisticText(_that.localId,_that.conversationId,_that.text,_that.createdAt,_that.server,_that.delivery);case _ChatThreadOptimisticAttachments():
-return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,_that.parts,_that.caption,_that.server,_that.delivery);case _:
+return optimisticText(_that.localId,_that.conversationId,_that.text,_that.createdAt,_that.server,_that.delivery,_that.replyToMessageId,_that.quotedPreview,_that.quotedSenderLabel);case _ChatThreadOptimisticAttachments():
+return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,_that.parts,_that.caption,_that.server,_that.delivery,_that.replyToMessageId,_that.quotedPreview,_that.quotedSenderLabel);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -170,12 +170,12 @@ return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( ChatMessageEnriched data)?  server,TResult? Function( String localId,  String conversationId,  String text,  DateTime createdAt,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery)?  optimisticText,TResult? Function( String localId,  String conversationId,  DateTime createdAt,  List<ChatOptimisticOutgoingPart> parts,  String? caption,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery)?  optimisticAttachments,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( ChatMessageEnriched data)?  server,TResult? Function( String localId,  String conversationId,  String text,  DateTime createdAt,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery,  String? replyToMessageId,  ChatReplyPreview? quotedPreview,  String? quotedSenderLabel)?  optimisticText,TResult? Function( String localId,  String conversationId,  DateTime createdAt,  List<ChatOptimisticOutgoingPart> parts,  String? caption,  ChatMessageEnriched? server,  ChatOptimisticDelivery delivery,  String? replyToMessageId,  ChatReplyPreview? quotedPreview,  String? quotedSenderLabel)?  optimisticAttachments,}) {final _that = this;
 switch (_that) {
 case _ChatThreadServer() when server != null:
 return server(_that.data);case _ChatThreadOptimisticText() when optimisticText != null:
-return optimisticText(_that.localId,_that.conversationId,_that.text,_that.createdAt,_that.server,_that.delivery);case _ChatThreadOptimisticAttachments() when optimisticAttachments != null:
-return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,_that.parts,_that.caption,_that.server,_that.delivery);case _:
+return optimisticText(_that.localId,_that.conversationId,_that.text,_that.createdAt,_that.server,_that.delivery,_that.replyToMessageId,_that.quotedPreview,_that.quotedSenderLabel);case _ChatThreadOptimisticAttachments() when optimisticAttachments != null:
+return optimisticAttachments(_that.localId,_that.conversationId,_that.createdAt,_that.parts,_that.caption,_that.server,_that.delivery,_that.replyToMessageId,_that.quotedPreview,_that.quotedSenderLabel);case _:
   return null;
 
 }
@@ -262,7 +262,7 @@ $ChatMessageEnrichedCopyWith<$Res> get data {
 
 
 class _ChatThreadOptimisticText implements ChatThreadItem {
-  const _ChatThreadOptimisticText({required this.localId, required this.conversationId, required this.text, required this.createdAt, this.server, this.delivery = ChatOptimisticDelivery.sending});
+  const _ChatThreadOptimisticText({required this.localId, required this.conversationId, required this.text, required this.createdAt, this.server, this.delivery = ChatOptimisticDelivery.sending, this.replyToMessageId, this.quotedPreview, this.quotedSenderLabel});
   
 
  final  String localId;
@@ -271,6 +271,10 @@ class _ChatThreadOptimisticText implements ChatThreadItem {
  final  DateTime createdAt;
  final  ChatMessageEnriched? server;
 @JsonKey() final  ChatOptimisticDelivery delivery;
+/// [send_message(..., p_reply_to)] и превью цитаты в пузырьке до прихода с сервера.
+ final  String? replyToMessageId;
+ final  ChatReplyPreview? quotedPreview;
+ final  String? quotedSenderLabel;
 
 /// Create a copy of ChatThreadItem
 /// with the given fields replaced by the non-null parameter values.
@@ -282,16 +286,16 @@ _$ChatThreadOptimisticTextCopyWith<_ChatThreadOptimisticText> get copyWith => __
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatThreadOptimisticText&&(identical(other.localId, localId) || other.localId == localId)&&(identical(other.conversationId, conversationId) || other.conversationId == conversationId)&&(identical(other.text, text) || other.text == text)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.server, server) || other.server == server)&&(identical(other.delivery, delivery) || other.delivery == delivery));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatThreadOptimisticText&&(identical(other.localId, localId) || other.localId == localId)&&(identical(other.conversationId, conversationId) || other.conversationId == conversationId)&&(identical(other.text, text) || other.text == text)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.server, server) || other.server == server)&&(identical(other.delivery, delivery) || other.delivery == delivery)&&(identical(other.replyToMessageId, replyToMessageId) || other.replyToMessageId == replyToMessageId)&&(identical(other.quotedPreview, quotedPreview) || other.quotedPreview == quotedPreview)&&(identical(other.quotedSenderLabel, quotedSenderLabel) || other.quotedSenderLabel == quotedSenderLabel));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,localId,conversationId,text,createdAt,server,delivery);
+int get hashCode => Object.hash(runtimeType,localId,conversationId,text,createdAt,server,delivery,replyToMessageId,quotedPreview,quotedSenderLabel);
 
 @override
 String toString() {
-  return 'ChatThreadItem.optimisticText(localId: $localId, conversationId: $conversationId, text: $text, createdAt: $createdAt, server: $server, delivery: $delivery)';
+  return 'ChatThreadItem.optimisticText(localId: $localId, conversationId: $conversationId, text: $text, createdAt: $createdAt, server: $server, delivery: $delivery, replyToMessageId: $replyToMessageId, quotedPreview: $quotedPreview, quotedSenderLabel: $quotedSenderLabel)';
 }
 
 
@@ -302,11 +306,11 @@ abstract mixin class _$ChatThreadOptimisticTextCopyWith<$Res> implements $ChatTh
   factory _$ChatThreadOptimisticTextCopyWith(_ChatThreadOptimisticText value, $Res Function(_ChatThreadOptimisticText) _then) = __$ChatThreadOptimisticTextCopyWithImpl;
 @useResult
 $Res call({
- String localId, String conversationId, String text, DateTime createdAt, ChatMessageEnriched? server, ChatOptimisticDelivery delivery
+ String localId, String conversationId, String text, DateTime createdAt, ChatMessageEnriched? server, ChatOptimisticDelivery delivery, String? replyToMessageId, ChatReplyPreview? quotedPreview, String? quotedSenderLabel
 });
 
 
-$ChatMessageEnrichedCopyWith<$Res>? get server;
+$ChatMessageEnrichedCopyWith<$Res>? get server;$ChatReplyPreviewCopyWith<$Res>? get quotedPreview;
 
 }
 /// @nodoc
@@ -319,7 +323,7 @@ class __$ChatThreadOptimisticTextCopyWithImpl<$Res>
 
 /// Create a copy of ChatThreadItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? localId = null,Object? conversationId = null,Object? text = null,Object? createdAt = null,Object? server = freezed,Object? delivery = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? localId = null,Object? conversationId = null,Object? text = null,Object? createdAt = null,Object? server = freezed,Object? delivery = null,Object? replyToMessageId = freezed,Object? quotedPreview = freezed,Object? quotedSenderLabel = freezed,}) {
   return _then(_ChatThreadOptimisticText(
 localId: null == localId ? _self.localId : localId // ignore: cast_nullable_to_non_nullable
 as String,conversationId: null == conversationId ? _self.conversationId : conversationId // ignore: cast_nullable_to_non_nullable
@@ -327,7 +331,10 @@ as String,text: null == text ? _self.text : text // ignore: cast_nullable_to_non
 as String,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,server: freezed == server ? _self.server : server // ignore: cast_nullable_to_non_nullable
 as ChatMessageEnriched?,delivery: null == delivery ? _self.delivery : delivery // ignore: cast_nullable_to_non_nullable
-as ChatOptimisticDelivery,
+as ChatOptimisticDelivery,replyToMessageId: freezed == replyToMessageId ? _self.replyToMessageId : replyToMessageId // ignore: cast_nullable_to_non_nullable
+as String?,quotedPreview: freezed == quotedPreview ? _self.quotedPreview : quotedPreview // ignore: cast_nullable_to_non_nullable
+as ChatReplyPreview?,quotedSenderLabel: freezed == quotedSenderLabel ? _self.quotedSenderLabel : quotedSenderLabel // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -343,6 +350,18 @@ $ChatMessageEnrichedCopyWith<$Res>? get server {
   return $ChatMessageEnrichedCopyWith<$Res>(_self.server!, (value) {
     return _then(_self.copyWith(server: value));
   });
+}/// Create a copy of ChatThreadItem
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$ChatReplyPreviewCopyWith<$Res>? get quotedPreview {
+    if (_self.quotedPreview == null) {
+    return null;
+  }
+
+  return $ChatReplyPreviewCopyWith<$Res>(_self.quotedPreview!, (value) {
+    return _then(_self.copyWith(quotedPreview: value));
+  });
 }
 }
 
@@ -350,7 +369,7 @@ $ChatMessageEnrichedCopyWith<$Res>? get server {
 
 
 class _ChatThreadOptimisticAttachments implements ChatThreadItem {
-  const _ChatThreadOptimisticAttachments({required this.localId, required this.conversationId, required this.createdAt, required final  List<ChatOptimisticOutgoingPart> parts, this.caption, this.server, this.delivery = ChatOptimisticDelivery.sending}): _parts = parts;
+  const _ChatThreadOptimisticAttachments({required this.localId, required this.conversationId, required this.createdAt, required final  List<ChatOptimisticOutgoingPart> parts, this.caption, this.server, this.delivery = ChatOptimisticDelivery.sending, this.replyToMessageId, this.quotedPreview, this.quotedSenderLabel}): _parts = parts;
   
 
  final  String localId;
@@ -366,6 +385,9 @@ class _ChatThreadOptimisticAttachments implements ChatThreadItem {
  final  String? caption;
  final  ChatMessageEnriched? server;
 @JsonKey() final  ChatOptimisticDelivery delivery;
+ final  String? replyToMessageId;
+ final  ChatReplyPreview? quotedPreview;
+ final  String? quotedSenderLabel;
 
 /// Create a copy of ChatThreadItem
 /// with the given fields replaced by the non-null parameter values.
@@ -377,16 +399,16 @@ _$ChatThreadOptimisticAttachmentsCopyWith<_ChatThreadOptimisticAttachments> get 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatThreadOptimisticAttachments&&(identical(other.localId, localId) || other.localId == localId)&&(identical(other.conversationId, conversationId) || other.conversationId == conversationId)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other._parts, _parts)&&(identical(other.caption, caption) || other.caption == caption)&&(identical(other.server, server) || other.server == server)&&(identical(other.delivery, delivery) || other.delivery == delivery));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatThreadOptimisticAttachments&&(identical(other.localId, localId) || other.localId == localId)&&(identical(other.conversationId, conversationId) || other.conversationId == conversationId)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other._parts, _parts)&&(identical(other.caption, caption) || other.caption == caption)&&(identical(other.server, server) || other.server == server)&&(identical(other.delivery, delivery) || other.delivery == delivery)&&(identical(other.replyToMessageId, replyToMessageId) || other.replyToMessageId == replyToMessageId)&&(identical(other.quotedPreview, quotedPreview) || other.quotedPreview == quotedPreview)&&(identical(other.quotedSenderLabel, quotedSenderLabel) || other.quotedSenderLabel == quotedSenderLabel));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,localId,conversationId,createdAt,const DeepCollectionEquality().hash(_parts),caption,server,delivery);
+int get hashCode => Object.hash(runtimeType,localId,conversationId,createdAt,const DeepCollectionEquality().hash(_parts),caption,server,delivery,replyToMessageId,quotedPreview,quotedSenderLabel);
 
 @override
 String toString() {
-  return 'ChatThreadItem.optimisticAttachments(localId: $localId, conversationId: $conversationId, createdAt: $createdAt, parts: $parts, caption: $caption, server: $server, delivery: $delivery)';
+  return 'ChatThreadItem.optimisticAttachments(localId: $localId, conversationId: $conversationId, createdAt: $createdAt, parts: $parts, caption: $caption, server: $server, delivery: $delivery, replyToMessageId: $replyToMessageId, quotedPreview: $quotedPreview, quotedSenderLabel: $quotedSenderLabel)';
 }
 
 
@@ -397,11 +419,11 @@ abstract mixin class _$ChatThreadOptimisticAttachmentsCopyWith<$Res> implements 
   factory _$ChatThreadOptimisticAttachmentsCopyWith(_ChatThreadOptimisticAttachments value, $Res Function(_ChatThreadOptimisticAttachments) _then) = __$ChatThreadOptimisticAttachmentsCopyWithImpl;
 @useResult
 $Res call({
- String localId, String conversationId, DateTime createdAt, List<ChatOptimisticOutgoingPart> parts, String? caption, ChatMessageEnriched? server, ChatOptimisticDelivery delivery
+ String localId, String conversationId, DateTime createdAt, List<ChatOptimisticOutgoingPart> parts, String? caption, ChatMessageEnriched? server, ChatOptimisticDelivery delivery, String? replyToMessageId, ChatReplyPreview? quotedPreview, String? quotedSenderLabel
 });
 
 
-$ChatMessageEnrichedCopyWith<$Res>? get server;
+$ChatMessageEnrichedCopyWith<$Res>? get server;$ChatReplyPreviewCopyWith<$Res>? get quotedPreview;
 
 }
 /// @nodoc
@@ -414,7 +436,7 @@ class __$ChatThreadOptimisticAttachmentsCopyWithImpl<$Res>
 
 /// Create a copy of ChatThreadItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? localId = null,Object? conversationId = null,Object? createdAt = null,Object? parts = null,Object? caption = freezed,Object? server = freezed,Object? delivery = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? localId = null,Object? conversationId = null,Object? createdAt = null,Object? parts = null,Object? caption = freezed,Object? server = freezed,Object? delivery = null,Object? replyToMessageId = freezed,Object? quotedPreview = freezed,Object? quotedSenderLabel = freezed,}) {
   return _then(_ChatThreadOptimisticAttachments(
 localId: null == localId ? _self.localId : localId // ignore: cast_nullable_to_non_nullable
 as String,conversationId: null == conversationId ? _self.conversationId : conversationId // ignore: cast_nullable_to_non_nullable
@@ -423,7 +445,10 @@ as DateTime,parts: null == parts ? _self._parts : parts // ignore: cast_nullable
 as List<ChatOptimisticOutgoingPart>,caption: freezed == caption ? _self.caption : caption // ignore: cast_nullable_to_non_nullable
 as String?,server: freezed == server ? _self.server : server // ignore: cast_nullable_to_non_nullable
 as ChatMessageEnriched?,delivery: null == delivery ? _self.delivery : delivery // ignore: cast_nullable_to_non_nullable
-as ChatOptimisticDelivery,
+as ChatOptimisticDelivery,replyToMessageId: freezed == replyToMessageId ? _self.replyToMessageId : replyToMessageId // ignore: cast_nullable_to_non_nullable
+as String?,quotedPreview: freezed == quotedPreview ? _self.quotedPreview : quotedPreview // ignore: cast_nullable_to_non_nullable
+as ChatReplyPreview?,quotedSenderLabel: freezed == quotedSenderLabel ? _self.quotedSenderLabel : quotedSenderLabel // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -438,6 +463,18 @@ $ChatMessageEnrichedCopyWith<$Res>? get server {
 
   return $ChatMessageEnrichedCopyWith<$Res>(_self.server!, (value) {
     return _then(_self.copyWith(server: value));
+  });
+}/// Create a copy of ChatThreadItem
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$ChatReplyPreviewCopyWith<$Res>? get quotedPreview {
+    if (_self.quotedPreview == null) {
+    return null;
+  }
+
+  return $ChatReplyPreviewCopyWith<$Res>(_self.quotedPreview!, (value) {
+    return _then(_self.copyWith(quotedPreview: value));
   });
 }
 }

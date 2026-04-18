@@ -69,5 +69,21 @@
 | `20260420120000_profile_follows_social_graph.sql` | `profile_follows`, счётчики на `profiles`, триггеры ±1, RLS, RPC `follow_user` / `unfollow_user` / `is_following_user`, списки подписчиков/подписок. |
 | `20260421100000_social_graph_blocks_notifications_feed_reconcile.sql` | `profile_blocks`, `notification_events` (dedupe), `can_user_interact`, расширенный `follow_user` (блоки, 200/h, нотификация), `list_following_feed_enriched_cursor`, `reconcile_profile_follow_counts` (service_role). |
 
+### Чат и сообщения (messages)
+
+Подробный разбор файлов и потока данных — **`migrations/_chat/README.md`**.
+
+| Файл | Назначение |
+|------|------------|
+| `20260417160000_chat_schema.sql` | Таблицы `chat_conversations`, `chat_participants`, `chat_messages`, реакции, вложения, ссылки на посты; RLS без прямого DML с клиента. |
+| `20260417161000_chat_rpc.sql` | RPC чата (создание dm/group, списки enriched, отправка текста, read markers, поиск и т.д.). |
+| `20260417162000_chat_search_fts.sql` | FTS по сообщениям в чатах пользователя. |
+| `20260421103000_chat_media_storage_send_attachments.sql` | Bucket `chat_media`, `send_message_with_attachments`. |
+| `20260422140000_chat_relax_storage_attach_cap.sql` | Коррекция лимитов Storage для вложений. |
+| `20260423120000_chat_get_message_enriched.sql` | `get_message_enriched` — одно сообщение в формате списка. |
+| `20260423180000_chat_realtime_publication.sql` | Таблицы чата в `supabase_realtime` для `postgres_changes`. |
+| `20260425120000_chat_broadcast_message_enriched.sql` | Broadcast `message_enriched` после INSERT. |
+| `20260425180000_chat_client_message_id.sql` | `client_message_id`, reconcile оптимистичных отправок. |
+
 ### Ленты / RPC (часть)
 - `20260411150000_list_user_feed_enriched_rpc.sql`, `20260411160000_hot_feed_enriched_profile_cursor.sql`, `20260416120000_user_feed_cluster_filter.sql` и др. — см. имена файлов в `supabase/migrations/`.

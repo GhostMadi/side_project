@@ -15,6 +15,7 @@ import 'package:side_project/core/shared/app_text_field.dart';
 import 'package:side_project/feature/chat/domain/chat_attachment_rules.dart';
 import 'package:side_project/feature/chat/domain/chat_outgoing_attachment.dart';
 import 'package:side_project/feature/chat/presentation/cubit/chat_thread_cubit.dart';
+import 'package:side_project/feature/chat/presentation/models/chat_outgoing_reply_draft.dart';
 
 const double _kComposerActionSize = 52;
 
@@ -59,12 +60,19 @@ class ChatThreadComposerBar extends StatefulWidget {
     required this.controller,
     required this.conversationId,
     required this.showAttachmentChooser,
+    this.replyDraft,
+    this.onClearReplyDraft,
   });
 
   final TextEditingController controller;
   final String conversationId;
 
   final Future<void> Function() showAttachmentChooser;
+
+  /// Ответ на сообщение (пока не отправлено).
+  final ChatOutgoingReplyDraft? replyDraft;
+
+  final VoidCallback? onClearReplyDraft;
 
   @override
   State<ChatThreadComposerBar> createState() => ChatThreadComposerBarState();
@@ -221,6 +229,7 @@ class ChatThreadComposerBarState extends State<ChatThreadComposerBar> with Ticke
   Future<void> _send() async {
     final text = widget.controller.text.trim();
     final hasMedia = _drafts.isNotEmpty;
+    final draft = widget.replyDraft;
 
     try {
       final thread = context.read<ChatThreadCubit>();
@@ -232,11 +241,24 @@ class ChatThreadComposerBarState extends State<ChatThreadComposerBar> with Ticke
         final caption = text.isNotEmpty ? text : null;
         widget.controller.clear();
         setState(() => _drafts.clear());
-        await thread.optimisticSendAttachments(outgoing: parts, caption: caption);
+        widget.onClearReplyDraft?.call();
+        await thread.optimisticSendAttachments(
+          outgoing: parts,
+          caption: caption,
+          replyToMessageId: draft?.messageId,
+          quotedPreview: draft?.preview,
+          quotedSenderLabel: draft?.senderLabel,
+        );
         return;
       }
       if (text.isEmpty) return;
-      await thread.optimisticSendText(text);
+      widget.onClearReplyDraft?.call();
+      await thread.optimisticSendText(
+        text,
+        replyToMessageId: draft?.messageId,
+        quotedPreview: draft?.preview,
+        quotedSenderLabel: draft?.senderLabel,
+      );
       widget.controller.clear();
     } catch (e) {
       await _toast('$e');
@@ -426,9 +448,14 @@ class ChatThreadComposerBarState extends State<ChatThreadComposerBar> with Ticke
 
       if (!mounted) return;
       final thread = context.read<ChatThreadCubit>();
+      final draft = widget.replyDraft;
+      widget.onClearReplyDraft?.call();
       await thread.optimisticSendAttachments(
         outgoing: [ChatOutgoingAttachment(bytes: bytes, filename: 'voice.m4a', mimeType: mime)],
         caption: null,
+        replyToMessageId: draft?.messageId,
+        quotedPreview: draft?.preview,
+        quotedSenderLabel: draft?.senderLabel,
       );
       try {
         await file.delete();
@@ -890,6 +917,63 @@ class ChatThreadComposerBarState extends State<ChatThreadComposerBar> with Ticke
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.replyDraft != null && !_recording) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Material(
+                  color: AppColors.inputBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 3,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Ответ • ${widget.replyDraft!.senderLabel}',
+                                style: AppTextStyle.base(
+                                  12,
+                                  color: AppColors.subTextColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                widget.replyDraft!.preview.text?.trim().isNotEmpty == true
+                                    ? widget.replyDraft!.preview.text!.trim()
+                                    : 'Сообщение',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyle.base(13, color: AppColors.textColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                          onPressed: widget.onClearReplyDraft,
+                          icon: Icon(Icons.close_rounded, size: 20, color: AppColors.subTextColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
             if (_drafts.isNotEmpty && !_recording) ...[
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 14, 12, 4),

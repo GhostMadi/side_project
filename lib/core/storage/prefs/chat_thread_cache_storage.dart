@@ -12,9 +12,6 @@ class ChatThreadCacheStorage {
 
   String _key(String userId, String conversationId) => 'chat_thread_v1_${userId}_$conversationId';
 
-  /// Свежесть snapshot для списка сообщений: дольше — выше риск «фантомного» UI.
-  static const maxAge = Duration(seconds: 6);
-
   Future<List<ChatMessageEnriched>?> read({
     required String userId,
     required String conversationId,
@@ -29,11 +26,6 @@ class ChatThreadCacheStorage {
       if (decoded is Map) {
         final v = decoded['v'];
         if (v == 2) {
-          final savedAtRaw = decoded['savedAt'];
-          final savedAt = savedAtRaw == null ? null : DateTime.tryParse(savedAtRaw.toString())?.toUtc();
-          if (savedAt != null && DateTime.now().toUtc().difference(savedAt) > maxAge) {
-            return null;
-          }
           final list = decoded['messages'];
           if (list is! List) return null;
           return list.whereType<Map>().map((e) => ChatMessageEnriched.fromJson(e.cast<String, dynamic>())).toList(growable: false);

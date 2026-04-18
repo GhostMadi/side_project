@@ -11,3 +11,7 @@
 ### Сохранения постов
 
 Отдельно от комментариев: сохранённые посты (`post_saves`), enriched saved feed и RPC — см. `_posts/README.md` и соответствующие миграции с `saved` / `post_saves` в имени.
+
+### Пост как объект в чате
+
+Таблица **`chat_message_post_refs`** и виды сообщений с `kind = post_ref` — в домене чата: см. **`../_chat/README.md`**.
