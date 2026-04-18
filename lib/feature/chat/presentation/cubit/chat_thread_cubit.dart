@@ -39,9 +39,12 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   final ChatThreadCacheStorage _cache;
 
   static const _pageSize = 50;
+  /// Если Realtime ещё не настроен на проекте — периодически подтягиваем ленту.
+  static const _safetyPollInterval = Duration(seconds: 12);
 
   RealtimeChannel? _channel;
   Timer? _debounceReload;
+  Timer? _safetyPoll;
 
   static String _localId() => 'local_${DateTime.now().microsecondsSinceEpoch}';
 
@@ -95,6 +98,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         );
       }
       _subscribeRealtime(cid);
+      _startSafetyPoll(cid);
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: list));
       }
@@ -112,18 +116,24 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Future<void> refresh() async {
     final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (s == null) return;
+    final cid = s.conversationId.trim();
     try {
-      final list = await _repo.listMessages(conversationId: s.conversationId, limit: _pageSize);
-      emit(_withServerViewRevision(state, _reconcileWithOptimistic(s, list)));
+      final list = await _repo.listMessages(conversationId: cid, limit: _pageSize);
+      final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (cur == null || cur.conversationId.trim() != cid) return;
+      emit(_withServerViewRevision(state, _reconcileWithOptimistic(cur, list)));
       final uid = _client.auth.currentUser?.id.trim();
       if (uid != null && uid.isNotEmpty) {
-        unawaited(_cache.write(userId: uid, conversationId: s.conversationId, messages: list));
+        unawaited(_cache.write(userId: uid, conversationId: cid, messages: list));
       }
       if (list.isNotEmpty) {
-        unawaited(_repo.markRead(conversationId: s.conversationId, lastMessageId: list.last.message.id));
+        unawaited(_repo.markRead(conversationId: cid, lastMessageId: list.last.message.id));
       }
     } catch (e) {
-      emit(s.copyWith(errorMessage: '$e'));
+      final again = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (again != null && again.conversationId.trim() == cid) {
+        emit(again.copyWith(errorMessage: '$e'));
+      }
     }
   }
 
@@ -525,6 +535,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Future<void> _mergeIncomingMessageRow(String messageId, {int attempt = 0}) async {
     final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (s == null) return;
+    final conversationId = s.conversationId.trim();
 
     var row = await _repo.getMessageEnriched(messageId);
     if (row == null && attempt < 2) {
@@ -538,10 +549,13 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       return;
     }
 
-    if (row.message.conversationId.trim() != s.conversationId.trim()) return;
+    if (row.message.conversationId.trim() != conversationId) return;
+
+    final live = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (live == null || live.conversationId.trim() != conversationId) return;
 
     final serverMsgs = <ChatMessageEnriched>[];
-    for (final it in s.items) {
+    for (final it in live.items) {
       it.maybeWhen(
         server: (d) => serverMsgs.add(d),
         orElse: () {},
@@ -555,13 +569,26 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       serverMsgs.removeAt(0);
     }
 
-    emit(_withServerViewRevision(state, _reconcileWithOptimistic(s, serverMsgs)));
+    final emitBase = state;
+    emit(_withServerViewRevision(emitBase, _reconcileWithOptimistic(live, serverMsgs)));
 
     final uid = _client.auth.currentUser?.id.trim();
     if (uid != null && uid.isNotEmpty) {
-      unawaited(_cache.write(userId: uid, conversationId: s.conversationId, messages: serverMsgs));
+      unawaited(_cache.write(userId: uid, conversationId: conversationId, messages: serverMsgs));
     }
-    unawaited(_repo.markRead(conversationId: s.conversationId, lastMessageId: row.message.id));
+    unawaited(_repo.markRead(conversationId: conversationId, lastMessageId: row.message.id));
+  }
+
+  void _startSafetyPoll(String conversationId) {
+    _safetyPoll?.cancel();
+    final cid = conversationId.trim();
+    if (cid.isEmpty) return;
+    _safetyPoll = Timer.periodic(_safetyPollInterval, (_) {
+      if (isClosed) return;
+      final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (loaded == null || loaded.conversationId.trim() != cid) return;
+      unawaited(refresh());
+    });
   }
 
   void _subscribeRealtime(String conversationId) {
@@ -578,14 +605,14 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     }
 
     void onMessagesChange(PostgresChangePayload payload) {
-      if (!messageBelongsToThread(payload)) return;
       if (payload.eventType == PostgresChangeEvent.insert) {
         final rawId = payload.newRecord['id'];
-        if (rawId != null) {
+        if (rawId != null && messageBelongsToThread(payload)) {
           unawaited(_mergeIncomingMessageRow(rawId.toString()));
         }
         return;
       }
+      if (!messageBelongsToThread(payload)) return;
       _scheduleDebouncedFullRefresh();
     }
 
@@ -636,6 +663,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   @override
   Future<void> close() async {
     _debounceReload?.cancel();
+    _safetyPoll?.cancel();
     await _channel?.unsubscribe();
     return super.close();
   }
