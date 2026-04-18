@@ -187,6 +187,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       final k = _normUuid(e.message.id);
       if (k != null) byId[k] = e;
     }
+
     for (final it in visible.items) {
       it.maybeWhen(
         server: putServer,
@@ -222,6 +223,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       final k = _normUuid(m.message.id);
       if (k != null) byId[k] = m;
     }
+
     for (final it in items) {
       it.maybeWhen(
         server: put,
@@ -1077,8 +1079,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
 
     final lrRaw = column('last_read_message_id');
     final lrTrim = lrRaw?.toString().trim();
-    _peerLastReadByUserId[uidRow] =
-        lrTrim == null || lrTrim.isEmpty ? null : (_normUuid(lrTrim) ?? lrTrim.toLowerCase());
+    _peerLastReadByUserId[uidRow] = lrTrim == null || lrTrim.isEmpty
+        ? null
+        : (_normUuid(lrTrim) ?? lrTrim.toLowerCase());
 
     final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (loaded == null) return;
@@ -1117,32 +1120,34 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     }
 
     var any = false;
-    final nextItems = loaded.items.map((it) {
-      return it.map(
-        server: (s) {
-          final nm = _patchOutgoingReadPeer(s.data.message, myId, byId);
-          if (identical(nm, s.data.message)) return it;
-          any = true;
-          return ChatThreadItem.server(s.data.copyWith(message: nm));
-        },
-        optimisticText: (o) {
-          final srv = o.server;
-          if (srv == null) return it;
-          final nm = _patchOutgoingReadPeer(srv.message, myId, byId);
-          if (identical(nm, srv.message)) return it;
-          any = true;
-          return o.copyWith(server: srv.copyWith(message: nm));
-        },
-        optimisticAttachments: (o) {
-          final srv = o.server;
-          if (srv == null) return it;
-          final nm = _patchOutgoingReadPeer(srv.message, myId, byId);
-          if (identical(nm, srv.message)) return it;
-          any = true;
-          return o.copyWith(server: srv.copyWith(message: nm));
-        },
-      );
-    }).toList(growable: false);
+    final nextItems = loaded.items
+        .map((it) {
+          return it.map(
+            server: (s) {
+              final nm = _patchOutgoingReadPeer(s.data.message, myId, byId);
+              if (identical(nm, s.data.message)) return it;
+              any = true;
+              return ChatThreadItem.server(s.data.copyWith(message: nm));
+            },
+            optimisticText: (o) {
+              final srv = o.server;
+              if (srv == null) return it;
+              final nm = _patchOutgoingReadPeer(srv.message, myId, byId);
+              if (identical(nm, srv.message)) return it;
+              any = true;
+              return o.copyWith(server: srv.copyWith(message: nm));
+            },
+            optimisticAttachments: (o) {
+              final srv = o.server;
+              if (srv == null) return it;
+              final nm = _patchOutgoingReadPeer(srv.message, myId, byId);
+              if (identical(nm, srv.message)) return it;
+              any = true;
+              return o.copyWith(server: srv.copyWith(message: nm));
+            },
+          );
+        })
+        .toList(growable: false);
 
     if (!any) return;
     _emitIfOpen(_withServerViewRevision(state, loaded.copyWith(items: nextItems)));
@@ -1160,11 +1165,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     return m.copyWith(readByPeer: next);
   }
 
-  bool _readByPeerForOutgoing(
-    ChatMessageModel m,
-    String myId,
-    Map<String, ChatMessageModel> byId,
-  ) {
+  bool _readByPeerForOutgoing(ChatMessageModel m, String myId, Map<String, ChatMessageModel> byId) {
     if (_peerLastReadByUserId.isEmpty) return false;
     for (final cursorId in _peerLastReadByUserId.values) {
       final raw = _normUuid(cursorId);
