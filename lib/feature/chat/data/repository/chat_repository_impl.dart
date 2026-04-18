@@ -151,6 +151,7 @@ class ChatRepositoryImpl implements ChatRepository {
     coerceId('sender_id');
     coerceId('reply_to_message_id');
     coerceId('forwarded_from_message_id');
+    coerceId('client_message_id');
 
     final k = m['kind'];
     if (k != null) {
@@ -192,7 +193,9 @@ class ChatRepositoryImpl implements ChatRepository {
     required String text,
     String? replyToMessageId,
     String? forwardFromMessageId,
+    String? clientMessageId,
   }) async {
+    final cm = clientMessageId?.trim();
     final res = await _client.rpc<dynamic>(
       'send_message',
       params: {
@@ -202,6 +205,7 @@ class ChatRepositoryImpl implements ChatRepository {
         'p_reply_to': replyToMessageId,
         'p_forward_from': forwardFromMessageId,
         'p_post_id': null,
+        if (cm != null && cm.isNotEmpty) 'p_client_message_id': cm,
       },
     );
     if (res is String && res.isNotEmpty) return res;

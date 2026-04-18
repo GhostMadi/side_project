@@ -30,6 +30,8 @@ abstract class ChatRepository {
     required String text,
     String? replyToMessageId,
     String? forwardFromMessageId,
+    /// Совпадает с optimistic localId → reconcile детерминированный.
+    String? clientMessageId,
   });
 
   Future<String> sendPostRef({

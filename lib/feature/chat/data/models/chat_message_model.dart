@@ -13,6 +13,8 @@ abstract class ChatMessageModel with _$ChatMessageModel {
     String? text,
     @JsonKey(name: 'reply_to_message_id') String? replyToMessageId,
     @JsonKey(name: 'forwarded_from_message_id') String? forwardedFromMessageId,
+    /// UUID с клиента для merge optimistic ↔ server без эвристик (send_message).
+    @JsonKey(name: 'client_message_id') String? clientMessageId,
     @JsonKey(name: 'created_at') required DateTime createdAt,
     @JsonKey(name: 'edited_at') DateTime? editedAt,
     @JsonKey(name: 'deleted_at') DateTime? deletedAt,

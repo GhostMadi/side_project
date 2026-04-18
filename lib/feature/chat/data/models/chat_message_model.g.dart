@@ -15,6 +15,7 @@ _ChatMessageModel _$ChatMessageModelFromJson(Map<String, dynamic> json) =>
       text: json['text'] as String?,
       replyToMessageId: json['reply_to_message_id'] as String?,
       forwardedFromMessageId: json['forwarded_from_message_id'] as String?,
+      clientMessageId: json['client_message_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       editedAt: json['edited_at'] == null
           ? null
@@ -33,6 +34,7 @@ Map<String, dynamic> _$ChatMessageModelToJson(_ChatMessageModel instance) =>
       'text': instance.text,
       'reply_to_message_id': instance.replyToMessageId,
       'forwarded_from_message_id': instance.forwardedFromMessageId,
+      'client_message_id': instance.clientMessageId,
       'created_at': instance.createdAt.toIso8601String(),
       'edited_at': instance.editedAt?.toIso8601String(),
       'deleted_at': instance.deletedAt?.toIso8601String(),

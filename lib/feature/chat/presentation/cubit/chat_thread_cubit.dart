@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -60,6 +61,22 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   final Set<String> _skipRpcEnrichmentIds = {};
 
   ChatThreadCubit(this._repo, this._client, this._cache) : super(const ChatThreadState.initial());
+
+  /// Совпадает с `client_message_id` на сервере / в broadcast — merge O(1).
+  static String _newClientMessageId() {
+    final r = Random.secure();
+    final bytes = List<int>.generate(16, (_) => r.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const h = '0123456789abcdef';
+    final sb = StringBuffer();
+    for (var i = 0; i < 16; i++) {
+      if (i == 4 || i == 6 || i == 8 || i == 10) sb.write('-');
+      sb.write(h[bytes[i] >> 4]);
+      sb.write(h[bytes[i] & 0xf]);
+    }
+    return sb.toString();
+  }
 
   static String _localId() => 'local_${DateTime.now().microsecondsSinceEpoch}';
 
@@ -234,7 +251,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (s == null) return;
     final t = text.trim();
 
-    final localId = _localId();
+    final localId = _newClientMessageId();
     final optimistic = ChatThreadItem.optimisticText(
       localId: localId,
       conversationId: s.conversationId,
@@ -352,7 +369,11 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     required String conversationId,
   }) async {
     try {
-      await _repo.sendText(conversationId: conversationId, text: text);
+      await _repo.sendText(
+        conversationId: conversationId,
+        text: text,
+        clientMessageId: localId,
+      );
       final curAck = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (curAck != null) {
         emit(
@@ -481,6 +502,34 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         optimisticText: (localId, conversationId, text, createdAt, attached, delivery) {
           if (delivery == ChatOptimisticDelivery.failed) return opt;
           if (attached != null) return opt;
+
+          for (var i = 0; i < serverList.length; i++) {
+            final sItem = serverList[i];
+            final data = sItem.maybeWhen(server: (d) => d, orElse: () => null);
+            if (data == null) continue;
+            if (usedServerIds.contains(data.message.id)) continue;
+            final cm = data.message.clientMessageId?.trim();
+            if (cm != null &&
+                cm.isNotEmpty &&
+                cm.toLowerCase() == localId.trim().toLowerCase()) {
+              final matched = serverList[i].when(
+                server: (d) => d,
+                optimisticText: (_, __, ___, ____, _____, ______) =>
+                    throw StateError('unexpected optimistic in serverList'),
+                optimisticAttachments: (_, __, ___, ____, _____, ______, _______) =>
+                    throw StateError('unexpected optimistic in serverList'),
+              );
+              usedServerIds.add(matched.message.id);
+              return ChatThreadItem.optimisticText(
+                localId: localId,
+                conversationId: conversationId,
+                text: text,
+                createdAt: createdAt,
+                server: matched,
+                delivery: ChatOptimisticDelivery.synced,
+              );
+            }
+          }
 
           int bestIdx = -1;
           int bestDeltaMs = 1 << 30;
