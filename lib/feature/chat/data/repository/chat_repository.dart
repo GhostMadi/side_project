@@ -19,6 +19,9 @@ abstract class ChatRepository {
     DateTime? before,
   });
 
+  /// Одна строка в формате [listMessages] — для подстановки после Realtime без полного списка.
+  Future<ChatMessageEnriched?> getMessageEnriched(String messageId);
+
   Future<String> sendText({
     required String conversationId,
     required String text,

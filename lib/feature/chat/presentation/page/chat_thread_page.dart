@@ -77,9 +77,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
         await _composerKey.currentState?.pickCameraAfterSheet();
       case ChatAttachmentChoice.file:
         await _composerKey.currentState?.pickDocumentsAfterSheet();
-      case ChatAttachmentChoice.contact:
-      case ChatAttachmentChoice.location:
-        break;
     }
   }
 
@@ -170,7 +167,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                             error: (m) => Center(
                               child: Text(m, style: AppTextStyle.base(14, color: AppColors.subTextColor)),
                             ),
-                            loaded: (conversationId, items, isLoadingMore, hasMore, errorMessage, _) {
+                            loaded: (conversationId, items, isLoadingMore, hasMore, errorMessage) {
                               return MediaQuery.removePadding(
                                 context: context,
                                 removeRight: true,

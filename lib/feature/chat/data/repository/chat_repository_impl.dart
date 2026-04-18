@@ -117,6 +117,24 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<ChatMessageEnriched?> getMessageEnriched(String messageId) async {
+    final id = messageId.trim();
+    if (id.isEmpty) return null;
+    try {
+      final res = await _client.rpc<dynamic>(
+        'get_message_enriched',
+        params: {'p_message_id': id},
+      );
+      if (res is! List || res.isEmpty) return null;
+      final row = res.first;
+      if (row is! Map) return null;
+      return ChatMessageEnriched.fromJson(Map<String, dynamic>.from(row));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Future<String> sendText({
     required String conversationId,
     required String text,

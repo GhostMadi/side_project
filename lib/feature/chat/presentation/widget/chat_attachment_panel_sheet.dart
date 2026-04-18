@@ -3,13 +3,11 @@ import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_bottom_sheet.dart';
 
-/// Выбор действия из панели «+»: фото из галереи, камера, файл и т.д.
+/// Выбор действия из панели «+»: фото, камера, файл.
 enum ChatAttachmentChoice {
   gallery,
   camera,
   file,
-  contact,
-  location,
 }
 
 /// Шторка вложений через общий [AppBottomSheet] (блюр, jelly).
@@ -50,18 +48,6 @@ class _AttachmentPanelContent extends StatelessWidget {
       subtitle: 'документ или видео',
       choice: ChatAttachmentChoice.file,
     ),
-    (
-      icon: Icons.person_rounded,
-      title: 'Контакт',
-      subtitle: 'скоро',
-      choice: ChatAttachmentChoice.contact,
-    ),
-    (
-      icon: Icons.location_on_rounded,
-      title: 'Геолокация',
-      subtitle: 'скоро',
-      choice: ChatAttachmentChoice.location,
-    ),
   ];
 
   @override
@@ -76,17 +62,7 @@ class _AttachmentPanelContent extends StatelessWidget {
             leading: Icon(item.icon, color: AppColors.primary, size: 26),
             title: Text(item.title, style: AppTextStyle.base(16, fontWeight: FontWeight.w600)),
             subtitle: Text(item.subtitle, style: AppTextStyle.base(13, color: AppColors.subTextColor)),
-            onTap: () {
-              switch (item.choice) {
-                case ChatAttachmentChoice.contact:
-                case ChatAttachmentChoice.location:
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Скоро')));
-                  Navigator.pop(context);
-                  return;
-                default:
-                  Navigator.pop(context, item.choice);
-              }
-            },
+            onTap: () => Navigator.pop(context, item.choice),
           ),
       ],
     );
