@@ -427,14 +427,23 @@ class _ChatThreadResumeSync extends StatefulWidget {
 }
 
 class _ChatThreadResumeSyncState extends State<_ChatThreadResumeSync> with WidgetsBindingObserver {
+  static const _peerCursorPollInterval = Duration(seconds: 15);
+
+  Timer? _peerCursorPoll;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _peerCursorPoll = Timer.periodic(_peerCursorPollInterval, (_) {
+      if (!mounted) return;
+      unawaited(context.read<ChatThreadCubit>().syncPeerReadCursorsOnly());
+    });
   }
 
   @override
   void dispose() {
+    _peerCursorPoll?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -445,6 +454,7 @@ class _ChatThreadResumeSyncState extends State<_ChatThreadResumeSync> with Widge
     if (state != AppLifecycleState.resumed) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      unawaited(context.read<ChatThreadCubit>().syncPeerReadCursorsOnly());
       await context.read<ChatThreadCubit>().refresh(syncReadReceipt: false);
       if (!mounted) return;
       if (widget.scrollController.hasClients &&

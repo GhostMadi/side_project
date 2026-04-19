@@ -373,6 +373,26 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     }
   }
 
+  /// Лёгкий REST: только курсоры peer для галочек — без `list_messages`.
+  /// Используйте как fallback, если UPDATE по Realtime до клиента не доехал при открытом треде.
+  Future<void> syncPeerReadCursorsOnly() async {
+    final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (loaded == null) {
+      ChatReadReceiptDebugLog.d('syncPeerReadCursorsOnly: skip not loaded');
+      return;
+    }
+    if (!_peerReadMapReady) {
+      ChatReadReceiptDebugLog.d('syncPeerReadCursorsOnly: skip peerReadMapReady=false');
+      return;
+    }
+    final cid = loaded.conversationId.trim();
+    if (cid.isEmpty) return;
+    ChatReadReceiptDebugLog.d('syncPeerReadCursorsOnly: REST pull conv=$cid');
+    await _syncPeerReadCursorsFromServer(cid);
+    if (isClosed) return;
+    _applyPeerReadByPeerLocally();
+  }
+
   void _beginOutgoingSendRpcGate() {
     _readReceiptDebounce?.cancel();
     _outstandingOutgoingSendRpc++;
@@ -1493,8 +1513,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     /// тогда **не матчится** → событие **не доходит до клиента** (пока не сделали full reload с БД).
     /// Поэтому подписка на участников **без** server-side filter; отсекаем чужие диалоги по строке здесь (RLS и так ограничивает строки).
     void onParticipantsChange(PostgresChangePayload payload) {
+      ChatReadReceiptDebugLog.wsParticipantsRaw(payload, expectedCid: cid);
       if (payload.eventType != PostgresChangeEvent.update) {
-        ChatReadReceiptDebugLog.d('participants WS skip event=${payload.eventType.name}');
+        ChatReadReceiptDebugLog.d('participants WS: non-UPDATE → read-receipt handler skipped');
         return;
       }
       final merged = _mergedParticipantRealtimeRow(payload);
