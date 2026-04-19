@@ -8,6 +8,7 @@ import 'package:side_project/core/storage/prefs/chat_thread_cache_storage.dart';
 import 'package:side_project/feature/chat/debug/chat_read_receipt_debug_log.dart';
 import 'package:side_project/feature/chat/data/models/chat_message_enriched.dart';
 import 'package:side_project/feature/chat/data/models/chat_message_model.dart';
+import 'package:side_project/feature/chat/data/models/chat_profile_mini_model.dart';
 import 'package:side_project/feature/chat/data/repository/chat_repository.dart';
 import 'package:side_project/feature/chat/domain/chat_outgoing_attachment.dart';
 import 'package:side_project/feature/chat/presentation/models/chat_optimistic_delivery.dart';
@@ -109,9 +110,12 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   static DateTime _threadItemSortTime(ChatThreadItem it) {
     return it.when(
       server: (d) => d.message.createdAt,
-      optimisticText: (_, __, ___, createdAt, ____, _____, ______, _______, __________) => createdAt,
-      optimisticAttachments: (_, __, createdAt, ___, ____, _____, ______, _______, __________, ___________) =>
-          createdAt,
+      // localId, conversationId, text, createdAt, server, delivery, …
+      optimisticText: (_, __, ___, localAt, server, _, _, _, _) =>
+          server?.message.createdAt ?? localAt,
+      // localId, conversationId, createdAt, parts, caption, server, delivery, …
+      optimisticAttachments: (_, __, localAt, ___, ____, server, _, _, _, _) =>
+          server?.message.createdAt ?? localAt,
     );
   }
 
@@ -266,6 +270,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       _emitIfOpen(const ChatThreadState.error('Пустой conversationId'));
       return;
     }
+    ChatReadReceiptDebugLog.d('load: start cid=$cid');
     _pendingMessageInsertRows.clear();
     _skipRpcEnrichmentIds.clear();
     _readReceiptDebounce?.cancel();
@@ -370,27 +375,91 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     _readReceiptDebounce = Timer(_readReceiptDebounceWindow, () {
       if (isClosed) return;
       final mid = _latestServerMessageIdForReadCursor();
-      if (mid == null || mid.isEmpty) return;
-      if (mid == _lastMarkedReadMessageId) return;
+      if (mid == null || mid.isEmpty) {
+        ChatReadReceiptDebugLog.d('markRead(reader): skip no last server message id in thread');
+        return;
+      }
+      if (mid == _lastMarkedReadMessageId) {
+        ChatReadReceiptDebugLog.d('markRead(reader): skip same as last mark mid=$mid');
+        return;
+      }
       final cid = state.maybeMap(loaded: (v) => v.conversationId.trim(), orElse: () => '');
       if (cid.isEmpty) return;
       _lastMarkedReadMessageId = mid;
+      ChatReadReceiptDebugLog.d('markRead(reader): POST mark_conversation_read conv=$cid lastMessageId=$mid');
       unawaited(_repo.markRead(conversationId: cid, lastMessageId: mid));
     });
   }
 
+  /// Самый «новый» в чате server id (как в SQL по `created_at`, `id`) — не «последний в списке»,
+  /// иначе без пересортировки после send хвостовой id остаётся старым.
   String? _latestServerMessageIdForReadCursor() {
     final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
     if (loaded == null || loaded.items.isEmpty) return null;
-    for (var i = loaded.items.length - 1; i >= 0; i--) {
-      final id = loaded.items[i].when(
-        server: (d) => d.message.id,
-        optimisticText: (_, __, ___, ____, server, _, _, _, _) => server?.message.id,
-        optimisticAttachments: (_, __, ___, ____, _____, server, _, _, _, _) => server?.message.id,
+    final messages = <ChatMessageModel>[];
+    for (final it in loaded.items) {
+      it.maybeWhen(
+        server: (d) => messages.add(d.message),
+        optimisticText: (_, __, ___, ____, server, _, _, _, _) {
+          if (server != null) messages.add(server.message);
+        },
+        optimisticAttachments: (_, __, ___, ____, _____, server, _, _, _, _) {
+          if (server != null) messages.add(server.message);
+        },
+        orElse: () {},
       );
-      if (id != null && id.isNotEmpty) return id;
     }
-    return null;
+    if (messages.isEmpty) return null;
+    var best = messages.first;
+    for (var i = 1; i < messages.length; i++) {
+      final m = messages[i];
+      if (_lexMsgStrictlyAfter(m, best)) best = m;
+    }
+    return best.id;
+  }
+
+  /// После `send_message` строка уже в БД — подтягиваем enriched, чтобы optimistic сразу имел server id:
+  /// иначе `_latestServerMessageIdForReadCursor` остаётся на предыдущем сообщении → mark_read не сдвигается.
+  Future<ChatMessageEnriched?> _fetchEnrichedAfterSend(String messageId) async {
+    final mid = messageId.trim();
+    if (mid.isEmpty) return null;
+    try {
+      final row = await _repo.getMessageEnriched(mid);
+      if (row != null) return row;
+    } catch (_) {}
+    await Future<void>.delayed(_mergeRetryDelay);
+    if (isClosed) return null;
+    try {
+      return await _repo.getMessageEnriched(mid);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  ChatMessageEnriched _minimalTextEnrichedAfterSend({
+    required String messageId,
+    required String conversationId,
+    required String text,
+    required String clientLocalId,
+  }) {
+    final uid = _client.auth.currentUser?.id.trim();
+    if (uid == null || uid.isEmpty) {
+      throw StateError('Нет сессии после send_message');
+    }
+    final m = ChatMessageModel(
+      id: messageId,
+      conversationId: conversationId,
+      senderId: uid,
+      kind: 'text',
+      text: text,
+      clientMessageId: clientLocalId,
+      createdAt: DateTime.now().toUtc(),
+      readByPeer: false,
+    );
+    return ChatMessageEnriched(
+      message: m,
+      sender: ChatProfileMiniModel(id: uid, username: null, avatarUrl: null),
+    );
   }
 
   Future<void> loadMore() async {
@@ -505,42 +574,47 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     String? replyToMessageId,
   }) async {
     try {
-      await _repo.sendMessageWithAttachments(
+      final serverMsgId = await _repo.sendMessageWithAttachments(
         conversationId: conversationId,
         caption: caption,
         replyToMessageId: replyToMessageId,
         parts: outgoing,
       );
+      final enriched = await _fetchEnrichedAfterSend(serverMsgId);
       final curAck = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (curAck != null) {
+        final nextItems = [
+          for (final it in curAck.items)
+            it.maybeWhen(
+              optimisticAttachments: (id, cid, ca, parts, cap, srv, delivery, rTo, qPrev, qLab) =>
+                  id == localId
+                  ? ChatThreadItem.optimisticAttachments(
+                      localId: id,
+                      conversationId: cid,
+                      createdAt: ca,
+                      parts: parts,
+                      caption: cap,
+                      server: enriched ?? srv,
+                      delivery: enriched != null
+                          ? ChatOptimisticDelivery.synced
+                          : ChatOptimisticDelivery.ack,
+                      replyToMessageId: rTo,
+                      quotedPreview: qPrev,
+                      quotedSenderLabel: qLab,
+                    )
+                  : it,
+              orElse: () => it,
+            ),
+        ];
         _emitIfOpen(
           curAck.copyWith(
-            items: [
-              for (final it in curAck.items)
-                it.maybeWhen(
-                  optimisticAttachments: (id, cid, ca, parts, cap, srv, delivery, rTo, qPrev, qLab) =>
-                      id == localId
-                      ? ChatThreadItem.optimisticAttachments(
-                          localId: id,
-                          conversationId: cid,
-                          createdAt: ca,
-                          parts: parts,
-                          caption: cap,
-                          server: srv,
-                          delivery: ChatOptimisticDelivery.ack,
-                          replyToMessageId: rTo,
-                          quotedPreview: qPrev,
-                          quotedSenderLabel: qLab,
-                        )
-                      : it,
-                  orElse: () => it,
-                ),
-            ],
+            items: _dedupeOverlappingServerRows(_sortedThreadItems(nextItems)),
             errorMessage: null,
           ),
         );
+        _lastMarkedReadMessageId = null;
+        if (enriched != null) _syncReadReceiptsAfterServerRowMutation();
       }
-      // Прочитано на стороне peer: UPDATE `chat_participants` → Realtime (см. [_subscribeRealtime]), без опроса REST после send.
     } catch (e) {
       final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (cur == null) return;
@@ -575,40 +649,50 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     String? replyToMessageId,
   }) async {
     try {
-      await _repo.sendText(
+      final serverMsgId = await _repo.sendText(
         conversationId: conversationId,
         text: text,
         clientMessageId: localId,
         replyToMessageId: replyToMessageId,
       );
+      var enriched = await _fetchEnrichedAfterSend(serverMsgId);
+      enriched ??=
+          _minimalTextEnrichedAfterSend(
+            messageId: serverMsgId,
+            conversationId: conversationId,
+            text: text,
+            clientLocalId: localId,
+          );
       final curAck = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (curAck != null) {
+        final nextItems = [
+          for (final it in curAck.items)
+            it.maybeWhen(
+              optimisticText: (id, cid, txt, ca, srv, delivery, rTo, qPrev, qLab) => id == localId
+                  ? ChatThreadItem.optimisticText(
+                      localId: id,
+                      conversationId: cid,
+                      text: txt,
+                      createdAt: ca,
+                      server: enriched,
+                      delivery: ChatOptimisticDelivery.synced,
+                      replyToMessageId: rTo,
+                      quotedPreview: qPrev,
+                      quotedSenderLabel: qLab,
+                    )
+                  : it,
+              orElse: () => it,
+            ),
+        ];
         _emitIfOpen(
           curAck.copyWith(
-            items: [
-              for (final it in curAck.items)
-                it.maybeWhen(
-                  optimisticText: (id, cid, txt, ca, srv, delivery, rTo, qPrev, qLab) => id == localId
-                      ? ChatThreadItem.optimisticText(
-                          localId: id,
-                          conversationId: cid,
-                          text: txt,
-                          createdAt: ca,
-                          server: srv,
-                          delivery: ChatOptimisticDelivery.ack,
-                          replyToMessageId: rTo,
-                          quotedPreview: qPrev,
-                          quotedSenderLabel: qLab,
-                        )
-                      : it,
-                  orElse: () => it,
-                ),
-            ],
+            items: _dedupeOverlappingServerRows(_sortedThreadItems(nextItems)),
             errorMessage: null,
           ),
         );
+        _lastMarkedReadMessageId = null;
+        _syncReadReceiptsAfterServerRowMutation();
       }
-      // Прочитано на стороне peer: UPDATE `chat_participants` → Realtime (см. [_subscribeRealtime]), без опроса REST после send.
     } catch (e) {
       final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (cur == null) return;
@@ -1238,7 +1322,16 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         .toList(growable: false);
 
     if (!any) {
-      ChatReadReceiptDebugLog.d('applyPeerRead: no tick change (cursors=$_peerLastReadByUserId)');
+      final sample = <String>[];
+      for (final m in byId.values) {
+        if (_normUuid(m.senderId) != myId) continue;
+        final want = _readByPeerForOutgoing(m, myId, byId);
+        sample.add('id=${m.id} readP=${m.readByPeer} want=$want afterCursor');
+        if (sample.length >= 6) break;
+      }
+      ChatReadReceiptDebugLog.d(
+        'applyPeerRead(sndr): no tick myId=$myId cursors=$_peerLastReadByUserId myMsgs=$sample',
+      );
       return;
     }
     ChatReadReceiptDebugLog.d('applyPeerRead: emit tick patch');
@@ -1359,7 +1452,14 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       )
       ..onBroadcast(event: 'message_enriched', callback: _onBroadcastMessageEnriched);
 
-    _channel!.subscribe();
+    _channel!.subscribe((status, err) {
+      ChatReadReceiptDebugLog.d(
+        'realtime: channel status=$status err=$err name=chat_thread_${conversationId.trim()} expectedCid=$cid',
+      );
+      if (status == RealtimeSubscribeStatus.channelError) {
+        ChatReadReceiptDebugLog.e('realtime: channelError (проверь publication/RLS/права)', err);
+      }
+    });
   }
 
   void _scheduleDebouncedFullRefresh() {
