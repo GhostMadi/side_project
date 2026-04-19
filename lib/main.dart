@@ -20,3 +20,4 @@ Future<void> main() async {
   await initializeDateFormatting('ru', null);
   runApp(const Application());
 }
+ 

@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
 import 'package:side_project/core/storage/prefs/chat_thread_cache_storage.dart';
+import 'package:side_project/feature/chat/debug/chat_read_receipt_debug_log.dart';
 import 'package:side_project/feature/chat/data/models/chat_message_enriched.dart';
 import 'package:side_project/feature/chat/data/models/chat_message_model.dart';
 import 'package:side_project/feature/chat/data/repository/chat_repository.dart';
@@ -239,6 +240,26 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     return byId;
   }
 
+  /// Строка из актуального ответа `list_messages*` / `_emitThreadWithEnrichedUpsert` для того же сообщения,
+  /// что уже лежит внутри optimistic `[server]` (до фикса optimistic «залипал» со старым read_by_peer).
+  ChatMessageEnriched? _findFreshServerRowInList(List<ChatThreadItem> serverRows, ChatMessageEnriched attached) {
+    final mid = _normUuid(attached.message.id);
+    final cidKey = attached.message.clientMessageId?.trim().toLowerCase();
+    for (final sItem in serverRows) {
+      final data = sItem.maybeWhen(server: (d) => d, orElse: () => null);
+      if (data == null) continue;
+      if (_normUuid(data.message.id) == mid) return data;
+      final cm = data.message.clientMessageId?.trim().toLowerCase();
+      if (cidKey != null && cidKey.isNotEmpty && cm == cidKey) return data;
+    }
+    return null;
+  }
+
+  ChatMessageEnriched _mergeAttachedWithFreshFetch(ChatMessageEnriched attached, ChatMessageEnriched fresh) {
+    final rb = attached.message.readByPeer || fresh.message.readByPeer;
+    return fresh.copyWith(message: fresh.message.copyWith(readByPeer: rb));
+  }
+
   Future<void> load(String conversationId) async {
     final cid = conversationId.trim();
     if (cid.isEmpty) {
@@ -295,6 +316,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       _flushPendingMessageInserts(cid);
       await _syncPeerReadCursorsFromServer(cid);
       _peerReadMapReady = true;
+      ChatReadReceiptDebugLog.d('load: peerReadMapReady=true cursors=${_peerLastReadByUserId.length}');
       _applyPeerReadByPeerLocally();
       if (uid != null && uid.isNotEmpty) {
         unawaited(_cache.write(userId: uid, conversationId: cid, messages: serverSnapshotForPersistence));
@@ -325,6 +347,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       _emitIfOpen(_withServerViewRevision(state, _reconcileWithOptimistic(cur, mergedList)));
       await _syncPeerReadCursorsFromServer(cid);
       _peerReadMapReady = true;
+      ChatReadReceiptDebugLog.d('refresh: peerReadMapReady=true cursors=${_peerLastReadByUserId.length}');
       _applyPeerReadByPeerLocally();
       final uid = _client.auth.currentUser?.id.trim();
       if (uid != null && uid.isNotEmpty) {
@@ -517,7 +540,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
         );
       }
-      // Полный list не дергаем: подтверждение придёт через Realtime INSERT → merge (или reconcile с сервером).
+      // Прочитано на стороне peer: UPDATE `chat_participants` → Realtime (см. [_subscribeRealtime]), без опроса REST после send.
     } catch (e) {
       final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (cur == null) return;
@@ -585,7 +608,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
         );
       }
-      // Без refresh после send: Realtime доставит строку; иначе сработает safety poll / pull.
+      // Прочитано на стороне peer: UPDATE `chat_participants` → Realtime (см. [_subscribeRealtime]), без опроса REST после send.
     } catch (e) {
       final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
       if (cur == null) return;
@@ -740,7 +763,24 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       return opt.maybeWhen(
         optimisticText: (localId, conversationId, text, createdAt, attached, delivery, rTo, qPrev, qLab) {
           if (delivery == ChatOptimisticDelivery.failed) return opt;
-          if (attached != null) return opt;
+          if (attached != null) {
+            final fresh = _findFreshServerRowInList(serverList, attached);
+            if (fresh != null) {
+              final merged = _mergeAttachedWithFreshFetch(attached, fresh);
+              return ChatThreadItem.optimisticText(
+                localId: localId,
+                conversationId: conversationId,
+                text: text,
+                createdAt: createdAt,
+                server: merged,
+                delivery: delivery == ChatOptimisticDelivery.sending ? delivery : ChatOptimisticDelivery.synced,
+                replyToMessageId: rTo,
+                quotedPreview: qPrev,
+                quotedSenderLabel: qLab,
+              );
+            }
+            return opt;
+          }
 
           for (var i = 0; i < serverList.length; i++) {
             final sItem = serverList[i];
@@ -819,7 +859,25 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         optimisticAttachments:
             (localId, conversationId, createdAt, parts, caption, attached, delivery, rTo, qPrev, qLab) {
               if (delivery == ChatOptimisticDelivery.failed) return opt;
-              if (attached != null) return opt;
+              if (attached != null) {
+                final fresh = _findFreshServerRowInList(serverList, attached);
+                if (fresh != null) {
+                  final merged = _mergeAttachedWithFreshFetch(attached, fresh);
+                  return ChatThreadItem.optimisticAttachments(
+                    localId: localId,
+                    conversationId: conversationId,
+                    createdAt: createdAt,
+                    parts: parts,
+                    caption: caption,
+                    server: merged,
+                    delivery: delivery == ChatOptimisticDelivery.sending ? delivery : ChatOptimisticDelivery.synced,
+                    replyToMessageId: rTo,
+                    quotedPreview: qPrev,
+                    quotedSenderLabel: qLab,
+                  );
+                }
+                return opt;
+              }
 
               int bestIdx = -1;
               int bestDeltaMs = 1 << 30;
@@ -1029,7 +1087,12 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         final k = _normUuid(e.key);
         if (k != null) _peerLastReadByUserId[k] = e.value;
       }
-    } catch (_) {}
+      ChatReadReceiptDebugLog.d(
+        'syncPeerCursors REST ok cid=$cid map=${_peerLastReadByUserId.entries.map((e) => '${e.key}:${e.value}').join(', ')}',
+      );
+    } catch (e, st) {
+      ChatReadReceiptDebugLog.d('syncPeerCursors REST error: $e\n$st');
+    }
   }
 
   /// Совпадает с SQL в `list_messages_enriched`: порядок хронологический `(created_at, id)`, не сравнение UUID как строк.
@@ -1062,7 +1125,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   void _onChatParticipantsRealtimeUpdate(PostgresChangePayload payload) {
     if (payload.eventType != PostgresChangeEvent.update) return;
     final raw = _mergedParticipantRealtimeRow(payload);
-    if (raw.isEmpty) return;
+    if (raw.isEmpty) {
+      ChatReadReceiptDebugLog.d('participants handler: empty merged row');
+      return;
+    }
 
     dynamic column(String snake) {
       final s = snake.toLowerCase();
@@ -1074,8 +1140,16 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
 
     final uidRow = _normUuid(column('user_id')?.toString());
     final myId = _normUuid(_client.auth.currentUser?.id);
-    if (uidRow == null || uidRow.isEmpty || myId == null || myId.isEmpty) return;
-    if (uidRow == myId) return;
+    if (uidRow == null || uidRow.isEmpty || myId == null || myId.isEmpty) {
+      ChatReadReceiptDebugLog.d(
+        'participants handler: skip missing uid (uidRow=$uidRow myId=$myId)',
+      );
+      return;
+    }
+    if (uidRow == myId) {
+      ChatReadReceiptDebugLog.d('participants handler: skip own row');
+      return;
+    }
 
     final lrRaw = column('last_read_message_id');
     final lrTrim = lrRaw?.toString().trim();
@@ -1084,8 +1158,19 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         : (_normUuid(lrTrim) ?? lrTrim.toLowerCase());
 
     final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
-    if (loaded == null) return;
-    if (!_peerReadMapReady) return;
+    if (loaded == null) {
+      ChatReadReceiptDebugLog.d('participants handler: skip not loaded');
+      return;
+    }
+    if (!_peerReadMapReady) {
+      ChatReadReceiptDebugLog.d(
+        'participants handler: skip peerReadMapReady=false peer=$uidRow last_read=${lrTrim ?? ''}',
+      );
+      return;
+    }
+    ChatReadReceiptDebugLog.d(
+      'participants WS → apply peer=$uidRow last_read=${lrTrim ?? ''}',
+    );
     _applyPeerReadByPeerLocally();
   }
 
@@ -1114,6 +1199,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
       final id = _normUuid(cursorId);
       if (id == null || id.isEmpty) continue;
       if (!byId.containsKey(id)) {
+        ChatReadReceiptDebugLog.d(
+          'applyPeerRead: cursor msg not in visible window → debounced refresh cursor=$id',
+        );
         _scheduleDebouncedFullRefresh();
         return;
       }
@@ -1149,7 +1237,11 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         })
         .toList(growable: false);
 
-    if (!any) return;
+    if (!any) {
+      ChatReadReceiptDebugLog.d('applyPeerRead: no tick change (cursors=$_peerLastReadByUserId)');
+      return;
+    }
+    ChatReadReceiptDebugLog.d('applyPeerRead: emit tick patch');
     _emitIfOpen(_withServerViewRevision(state, loaded.copyWith(items: nextItems)));
   }
 
@@ -1177,6 +1269,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     return true;
   }
 
+  /// Realtime по этому каналу: новые сообщения (`chat_messages`) и **прочитано собеседником** —
+  /// это `UPDATE` в `chat_participants` у другого участника (`last_read_message_id`).
+  /// Отдельный REST по курсорам только при [load]/[refresh] (начальный снимок); после открытия треда —
+  /// только события WS + локальный патч [_applyPeerReadByPeerLocally].
   void _subscribeRealtime(String conversationId) {
     _channel?.unsubscribe();
     final cid = conversationId.trim().toLowerCase();
@@ -1196,10 +1292,21 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     /// тогда **не матчится** → событие **не доходит до клиента** (пока не сделали full reload с БД).
     /// Поэтому подписка на участников **без** server-side filter; отсекаем чужие диалоги по строке здесь (RLS и так ограничивает строки).
     void onParticipantsChange(PostgresChangePayload payload) {
-      if (payload.eventType != PostgresChangeEvent.update) return;
+      if (payload.eventType != PostgresChangeEvent.update) {
+        ChatReadReceiptDebugLog.d('participants WS skip event=${payload.eventType.name}');
+        return;
+      }
       final merged = _mergedParticipantRealtimeRow(payload);
       final conv = _conversationIdFromMergedRow(merged);
-      if (conv == null || conv != cid) return;
+      final uidPeek = merged['user_id'] ?? merged['USER_ID'];
+      final lrPeek = merged['last_read_message_id'] ?? merged['LAST_READ_MESSAGE_ID'];
+      ChatReadReceiptDebugLog.d(
+        'participants WS UPDATE mergedConv=$conv expected=$cid user_id=$uidPeek last_read=$lrPeek keys=${merged.keys.join(',')}',
+      );
+      if (conv == null || conv != cid) {
+        ChatReadReceiptDebugLog.d('participants WS UPDATE filtered (conv mismatch or null)');
+        return;
+      }
       _onChatParticipantsRealtimeUpdate(payload);
     }
 
