@@ -58,6 +58,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Timer? _readReceiptDebounce;
   String? _lastMarkedReadMessageId;
 
+  /// Пока уходит RPC отправки сообщения — не вызывать `mark_conversation_read` по debounce скролла:
+  /// иначе фиксируется хвост **до** нового сообщения (гонка как в логах: af1fb429 vs a9fff433).
+  int _outstandingOutgoingSendRpc = 0;
+
   /// Прочие участники (`user_id` → `last_read_message_id`). После [load]/[refresh] синхронизируется с БД; Realtime UPDATE только дополняет.
   final Map<String, String?> _peerLastReadByUserId = {};
   bool _peerReadMapReady = false;
@@ -369,26 +373,81 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     }
   }
 
+  void _beginOutgoingSendRpcGate() {
+    _readReceiptDebounce?.cancel();
+    _outstandingOutgoingSendRpc++;
+    ChatReadReceiptDebugLog.d(
+      'markRead(reader): pause until send RPC ends (outstanding=$_outstandingOutgoingSendRpc)',
+    );
+  }
+
+  void _endOutgoingSendRpcGate() {
+    _outstandingOutgoingSendRpc--;
+    if (_outstandingOutgoingSendRpc < 0) _outstandingOutgoingSendRpc = 0;
+    ChatReadReceiptDebugLog.d(
+      'markRead(reader): send RPC gate done outstanding=$_outstandingOutgoingSendRpc → '
+      '${_outstandingOutgoingSendRpc == 0 ? 'schedule mark_read' : 'still busy'}',
+    );
+    if (_outstandingOutgoingSendRpc == 0 && !isClosed) {
+      scheduleMarkReadAfterViewingBottom();
+    }
+  }
+
   /// Вызывать со страницы, когда скролл у нижнего края ленты (пользователь видит последние сообщения).
   void scheduleMarkReadAfterViewingBottom() {
+    if (_outstandingOutgoingSendRpc > 0) {
+      ChatReadReceiptDebugLog.d(
+        'markRead(reader): skip schedule while send RPC in flight ($_outstandingOutgoingSendRpc)',
+      );
+      return;
+    }
     _readReceiptDebounce?.cancel();
+    ChatReadReceiptDebugLog.d(
+      'markRead(reader): debounce ${_readReceiptDebounceWindow.inMilliseconds}ms '
+      '(lastMarked=$_lastMarkedReadMessageId tailPreview=${_debugTailPreviewForMarkReadLog()})',
+    );
     _readReceiptDebounce = Timer(_readReceiptDebounceWindow, () {
       if (isClosed) return;
-      final mid = _latestServerMessageIdForReadCursor();
-      if (mid == null || mid.isEmpty) {
-        ChatReadReceiptDebugLog.d('markRead(reader): skip no last server message id in thread');
-        return;
-      }
-      if (mid == _lastMarkedReadMessageId) {
-        ChatReadReceiptDebugLog.d('markRead(reader): skip same as last mark mid=$mid');
-        return;
-      }
-      final cid = state.maybeMap(loaded: (v) => v.conversationId.trim(), orElse: () => '');
-      if (cid.isEmpty) return;
-      _lastMarkedReadMessageId = mid;
-      ChatReadReceiptDebugLog.d('markRead(reader): POST mark_conversation_read conv=$cid lastMessageId=$mid');
-      unawaited(_repo.markRead(conversationId: cid, lastMessageId: mid));
+      unawaited(_runMarkReadDebounced());
     });
+  }
+
+  Future<void> _runMarkReadDebounced() async {
+    if (_outstandingOutgoingSendRpc > 0) {
+      ChatReadReceiptDebugLog.d(
+        'markRead(reader): skip debounce body — send RPC in flight ($_outstandingOutgoingSendRpc)',
+      );
+      return;
+    }
+    final mid = _latestServerMessageIdForReadCursor();
+    ChatReadReceiptDebugLog.d(
+      'markRead(reader): debounce fired computedTail=${mid ?? 'null'} lastMarked=$_lastMarkedReadMessageId',
+    );
+    if (mid == null || mid.isEmpty) {
+      ChatReadReceiptDebugLog.d('markRead(reader): skip no last server message id in thread');
+      return;
+    }
+    if (mid == _lastMarkedReadMessageId) {
+      ChatReadReceiptDebugLog.d('markRead(reader): skip same as last mark mid=$mid');
+      return;
+    }
+    final cid = state.maybeMap(loaded: (v) => v.conversationId.trim(), orElse: () => '');
+    if (cid.isEmpty) return;
+    _lastMarkedReadMessageId = mid;
+    ChatReadReceiptDebugLog.d('markRead(reader): POST mark_conversation_read conv=$cid lastMessageId=$mid');
+    try {
+      await _repo.markRead(conversationId: cid, lastMessageId: mid);
+      ChatReadReceiptDebugLog.d('markRead(reader): RPC mark_conversation_read completed (expect 204)');
+    } catch (e, st) {
+      ChatReadReceiptDebugLog.e('markRead(reader): RPC mark_conversation_read failed', e, st);
+    }
+  }
+
+  /// Короткая строка для лога до debounce (без тяжёлых вычислений).
+  String _debugTailPreviewForMarkReadLog() {
+    if (!ChatReadReceiptDebugLog.enabled) return '';
+    final t = _latestServerMessageIdForReadCursor();
+    return t ?? 'null';
   }
 
   /// Самый «новый» в чате server id (как в SQL по `created_at`, `id`) — не «последний в списке»,
@@ -425,13 +484,22 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     if (mid.isEmpty) return null;
     try {
       final row = await _repo.getMessageEnriched(mid);
-      if (row != null) return row;
-    } catch (_) {}
+      if (row != null) {
+        ChatReadReceiptDebugLog.d('getEnrichedAfterSend: ok first try id=$mid');
+        return row;
+      }
+      ChatReadReceiptDebugLog.d('getEnrichedAfterSend: null first try id=$mid → retry ${_mergeRetryDelay.inMilliseconds}ms');
+    } catch (e) {
+      ChatReadReceiptDebugLog.d('getEnrichedAfterSend: error first try id=$mid err=$e');
+    }
     await Future<void>.delayed(_mergeRetryDelay);
     if (isClosed) return null;
     try {
-      return await _repo.getMessageEnriched(mid);
-    } catch (_) {
+      final row = await _repo.getMessageEnriched(mid);
+      ChatReadReceiptDebugLog.d('getEnrichedAfterSend: retry id=$mid ${row != null ? 'ok' : 'still null'}');
+      return row;
+    } catch (e) {
+      ChatReadReceiptDebugLog.d('getEnrichedAfterSend: retry error id=$mid err=$e');
       return null;
     }
   }
@@ -573,6 +641,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     String? caption,
     String? replyToMessageId,
   }) async {
+    _beginOutgoingSendRpcGate();
     try {
       final serverMsgId = await _repo.sendMessageWithAttachments(
         conversationId: conversationId,
@@ -613,6 +682,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
         );
         _lastMarkedReadMessageId = null;
+        ChatReadReceiptDebugLog.d(
+          'attachSend: rpcMsgId=$serverMsgId clientLocal=$localId enriched=${enriched != null} '
+          'tail=${_latestServerMessageIdForReadCursor()} clearedLastMarked=1',
+        );
         if (enriched != null) _syncReadReceiptsAfterServerRowMutation();
       }
     } catch (e) {
@@ -639,6 +712,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
       ];
       _emitIfOpen(cur.copyWith(items: next, errorMessage: null));
+    } finally {
+      _endOutgoingSendRpcGate();
     }
   }
 
@@ -648,6 +723,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     required String conversationId,
     String? replyToMessageId,
   }) async {
+    _beginOutgoingSendRpcGate();
     try {
       final serverMsgId = await _repo.sendText(
         conversationId: conversationId,
@@ -655,8 +731,9 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         clientMessageId: localId,
         replyToMessageId: replyToMessageId,
       );
-      var enriched = await _fetchEnrichedAfterSend(serverMsgId);
-      enriched ??=
+      final rowFromRpc = await _fetchEnrichedAfterSend(serverMsgId);
+      final usedMinimalFallback = rowFromRpc == null;
+      var enriched = rowFromRpc ??
           _minimalTextEnrichedAfterSend(
             messageId: serverMsgId,
             conversationId: conversationId,
@@ -691,6 +768,10 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
         );
         _lastMarkedReadMessageId = null;
+        ChatReadReceiptDebugLog.d(
+          'sendText: rpcMsgId=$serverMsgId clientLocal=$localId minimalFallback=$usedMinimalFallback '
+          'tailChronoAfterEmit=${_latestServerMessageIdForReadCursor()} clearedLastMarked=1',
+        );
         _syncReadReceiptsAfterServerRowMutation();
       }
     } catch (e) {
@@ -716,6 +797,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
           ),
       ];
       _emitIfOpen(cur.copyWith(items: next, errorMessage: null));
+    } finally {
+      _endOutgoingSendRpcGate();
     }
   }
 
@@ -1322,16 +1405,41 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         .toList(growable: false);
 
     if (!any) {
-      final sample = <String>[];
-      for (final m in byId.values) {
-        if (_normUuid(m.senderId) != myId) continue;
-        final want = _readByPeerForOutgoing(m, myId, byId);
-        sample.add('id=${m.id} readP=${m.readByPeer} want=$want afterCursor');
-        if (sample.length >= 6) break;
-      }
-      ChatReadReceiptDebugLog.d(
-        'applyPeerRead(sndr): no tick myId=$myId cursors=$_peerLastReadByUserId myMsgs=$sample',
+      final buf = StringBuffer(
+        'applyPeerRead(sndr): no tick myId=$myId peerCursors=$_peerLastReadByUserId ready=$_peerReadMapReady',
       );
+      if (ChatReadReceiptDebugLog.verbose) {
+        final mine = <ChatMessageModel>[];
+        for (final m in byId.values) {
+          if (_normUuid(m.senderId) == myId) mine.add(m);
+        }
+        mine.sort((a, b) {
+          final c = a.createdAt.compareTo(b.createdAt);
+          if (c != 0) return c;
+          return (_normUuid(a.id) ?? a.id).compareTo(_normUuid(b.id) ?? b.id);
+        });
+        final newestMine = mine.isEmpty ? null : mine.last;
+        buf.write(' | newestMine=${newestMine?.id} newestRp=${newestMine?.readByPeer}');
+        for (final raw in _peerLastReadByUserId.values) {
+          final cid = _normUuid(raw);
+          if (cid == null) continue;
+          final rm = cid.isEmpty ? null : byId[cid];
+          if (rm == null) {
+            buf.write(' | cursor=$cid rm=MISSING (not in window)');
+          } else if (newestMine != null) {
+            final unreadTip = _lexMsgStrictlyAfter(newestMine, rm);
+            buf.write(
+              ' | vsCursor=$cid rmId=${rm.id} newestStrictlyAfterRm=$unreadTip '
+              '(peer read up to rm → your newest ${unreadTip ? "NOT read yet" : "read or same"})',
+            );
+          }
+        }
+        final tail = mine.length <= 8 ? mine : mine.sublist(mine.length - 8);
+        buf.write(
+          ' | lastOutgoingChrono=[${tail.map((m) => '${m.id.substring(0, 8)}… rp=${m.readByPeer} w=${_readByPeerForOutgoing(m, myId, byId)}').join('; ')}]',
+        );
+      }
+      ChatReadReceiptDebugLog.d(buf.toString());
       return;
     }
     ChatReadReceiptDebugLog.d('applyPeerRead: emit tick patch');
@@ -1474,6 +1582,7 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
   Future<void> close() async {
     _debounceReload?.cancel();
     _readReceiptDebounce?.cancel();
+    _outstandingOutgoingSendRpc = 0;
     _peerLastReadByUserId.clear();
     _peerReadMapReady = false;
     _pendingMessageInsertRows.clear();

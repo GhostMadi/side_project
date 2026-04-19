@@ -6,8 +6,12 @@ import 'package:flutter/foundation.dart';
 ///
 /// В релизе по умолчанию выключено. Чтобы отключить шум в debug: [enabled] = false.
 /// В DevTools / консоли фильтр по имени: `ChatRead`.
+/// Ещё подробнее (хвост, cmp с курсором): [verbose].
 abstract final class ChatReadReceiptDebugLog {
   static bool enabled = kDebugMode;
+
+  /// Доп. строки про newestMine vs peer cursor и send-tail (шумнее).
+  static bool verbose = true;
 
   static void d(String message) {
     if (!enabled) return;
