@@ -1,5 +1,6 @@
 -- Enriched-сообщение в Realtime Broadcast сразу после INSERT (тот же JSON, что get_message_enriched).
 -- Клиент: topic = 'chat_thread_' || conversation_id, event = 'message_enriched', public channel.
+-- См. также: migrations/_chat/README.md (Realtime), companion broadcast peer_read — 20260429140000_chat_broadcast_peer_read.sql.
 
 create or replace function public._chat_message_enriched_json(p_message_id uuid)
 returns jsonb

@@ -70,12 +70,13 @@ class PostCreateRepositoryImpl implements PostCreateRepository {
         'base64': base64Encode(bytes),
         if (aspect != null && aspect.trim().isNotEmpty) 'aspect': aspect.trim(),
       },
-      video: (bytes, mime, ext, aspect) => {
+      video: (bytes, mime, ext, aspect, posterJpeg) => {
         'type': 'video',
         'mime': mime,
         'ext': ext,
         'base64': base64Encode(bytes),
         if (aspect != null && aspect.trim().isNotEmpty) 'aspect': aspect.trim(),
+        if (posterJpeg != null && posterJpeg.isNotEmpty) 'poster_base64': base64Encode(posterJpeg),
       },
     );
   }

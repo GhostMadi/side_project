@@ -18,6 +18,8 @@ abstract class PostCreateMediaItem with _$PostCreateMediaItem {
     required String mime,
     required String ext,
     String? aspect,
+    /// JPEG frame for feed/cover; optional (server may accept null for legacy).
+    Uint8List? posterJpeg,
   }) = _Video;
 }
 

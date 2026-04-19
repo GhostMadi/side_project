@@ -28,6 +28,7 @@ import 'package:side_project/feature/post_create_page/presentation/page/post_cre
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_models.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_video_preview.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_edit_gpu_preview.dart';
+import 'package:side_project/feature/post_create_page/presentation/widget/post_create_video_cover_sheet.dart';
 import 'package:side_project/feature/post_create_page/presentation/widget/post_reorder_bottom_sheet.dart';
 import 'package:side_project/feature/post_create_page/presentation/widget/post_reorder_card.dart';
 import 'package:side_project/feature/profile/data/models/profile_search_hit.dart';
@@ -326,6 +327,45 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
       _activeAdjust = null;
       _clearCropSession();
     });
+    unawaited(_prefillVideoPostersFromFile());
+  }
+
+  /// Авто-кадр для превью на шаге «Подробности», если пользователь не открывал экран обложки.
+  Future<void> _prefillVideoPostersFromFile() async {
+    for (var i = 0; i < _slots.length; i++) {
+      final s = _slots[i];
+      if (!s.isVideo) {
+        continue;
+      }
+      if (s.videoPosterJpeg != null && s.videoPosterJpeg!.isNotEmpty) {
+        continue;
+      }
+      final jpeg = await captureVideoPosterJpeg(s.displayFile);
+      if (!mounted || jpeg == null) {
+        continue;
+      }
+      setState(() {
+        _slots[i] = _slots[i].copyWithVideoPoster(jpeg);
+      });
+    }
+  }
+
+  Future<void> _pickVideoCover(int index) async {
+    final s = _slots[index];
+    if (!s.isVideo) {
+      return;
+    }
+    final bytes = await showModalBottomSheet<Uint8List>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => PostCreateVideoCoverSheet(file: s.displayFile, initialPoster: s.videoPosterJpeg),
+    );
+    if (bytes != null && bytes.isNotEmpty && mounted) {
+      setState(() {
+        _slots[index] = s.copyWithVideoPoster(bytes);
+      });
+    }
   }
 
   void _openDetailsMediaViewer(int initialIndex) {
@@ -429,14 +469,37 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         final thumbPx = (64 * dpr).round().clamp(96, 256);
 
         final Widget thumb = slot.isVideo
-            ? ColoredBox(
-                color: AppColors.inputBackground,
-                child: Icon(
-                  Icons.play_circle_fill,
-                  color: AppColors.postEditorOnSurfaceMuted.withValues(alpha: 0.85),
-                  size: 32,
-                ),
-              )
+            ? (slot.videoPosterJpeg != null && slot.videoPosterJpeg!.isNotEmpty
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.memory(
+                          slot.videoPosterJpeg!,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          filterQuality: FilterQuality.low,
+                          cacheWidth: thumbPx,
+                          cacheHeight: thumbPx,
+                          errorBuilder: (_, __, ___) => ColoredBox(color: AppColors.inputBackground),
+                        ),
+                        Align(
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.play_circle_fill,
+                            color: Colors.white.withValues(alpha: 0.88),
+                            size: 28,
+                          ),
+                        ),
+                      ],
+                    )
+                  : ColoredBox(
+                      color: AppColors.inputBackground,
+                      child: Icon(
+                        Icons.play_circle_fill,
+                        color: AppColors.postEditorOnSurfaceMuted.withValues(alpha: 0.85),
+                        size: 32,
+                      ),
+                    ))
             : Image.file(
                 slot.displayFile,
                 fit: BoxFit.cover,
@@ -483,7 +546,17 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
           'webm' => 'video/webm',
           _ => 'video/mp4',
         };
-        out.add(PostCreateMediaItem.video(bytes: bytes, mime: mime, ext: ext, aspect: aspect));
+        var poster = s.videoPosterJpeg;
+        poster ??= await captureVideoPosterJpeg(s.displayFile);
+        out.add(
+          PostCreateMediaItem.video(
+            bytes: bytes,
+            mime: mime,
+            ext: ext,
+            aspect: aspect,
+            posterJpeg: poster,
+          ),
+        );
       } else {
         final baked = _bakedForDetails[i];
         if (baked == null) {
@@ -885,10 +958,30 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
                 if (slot.isVideo)
                   Padding(
                     padding: EdgeInsets.fromLTRB(24, 18, 24, 20 + bottomInset * 0.5),
-                    child: Text(
-                      'Для видео коррекция недоступна — файл уйдёт в пост как есть.',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyle.base(14, color: AppColors.postEditorOnSurfaceMuted, height: 1.4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Для видео коррекция недоступна — файл уйдёт в пост как есть.',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyle.base(14, color: AppColors.postEditorOnSurfaceMuted, height: 1.4),
+                        ),
+                        const SizedBox(height: 14),
+                        FilledButton.icon(
+                          onPressed: () => _pickVideoCover(_editIndex),
+                          icon: const Icon(Icons.photo_size_select_actual_outlined, size: 20),
+                          label: Text(
+                            slot.videoPosterJpeg != null && slot.videoPosterJpeg!.isNotEmpty
+                                ? 'Изменить обложку'
+                                : 'Выбрать обложку',
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.surface,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          ),
+                        ),
+                      ],
                     ),
                   )
                 else ...[
@@ -1313,14 +1406,34 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
           width: size,
           height: size,
           child: s.isVideo
-              ? ColoredBox(
-                  color: AppColors.inputBackground,
-                  child: Icon(
-                    Icons.play_circle_fill,
-                    color: AppColors.iconMuted.withValues(alpha: 0.9),
-                    size: (size * 0.42).clamp(28.0, 44.0),
-                  ),
-                )
+              ? (s.videoPosterJpeg != null && s.videoPosterJpeg!.isNotEmpty
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.memory(
+                            s.videoPosterJpeg!,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            filterQuality: FilterQuality.medium,
+                          ),
+                          Align(
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.play_circle_fill,
+                              color: Colors.white.withValues(alpha: 0.88),
+                              size: (size * 0.42).clamp(28.0, 44.0),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ColoredBox(
+                        color: AppColors.inputBackground,
+                        child: Icon(
+                          Icons.play_circle_fill,
+                          color: AppColors.iconMuted.withValues(alpha: 0.9),
+                          size: (size * 0.42).clamp(28.0, 44.0),
+                        ),
+                      ))
               : baked != null
               ? Image.memory(
                   baked,

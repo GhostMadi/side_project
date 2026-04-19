@@ -109,6 +109,7 @@ class _VoiceWaveformPainter extends CustomPainter {
 
 class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
   late final AudioPlayer _player = AudioPlayer();
+  StreamSubscription<PlayerState>? _playerStateSub;
   File? _tempFile;
   bool _loadingSource = true;
   bool _failed = false;
@@ -120,7 +121,23 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
     final seed = widget.networkUrl?.hashCode ?? widget.memoryBytes?.hashCode ?? 0;
     final rnd = Random(seed ^ 0x51a7beef);
     _barHeights = List.generate(44, (_) => 0.22 + rnd.nextDouble() * 0.78);
+    _playerStateSub = _player.playerStateStream.listen(_onPlayerStateChanged);
     unawaited(_bindSource());
+  }
+
+  void _onPlayerStateChanged(PlayerState state) {
+    if (!mounted) return;
+    if (state.processingState != ProcessingState.completed) return;
+    unawaited(_resetToStartAfterPlaybackFinished());
+  }
+
+  /// После проигрывания до конца возвращаем на начало — можно снова нажать play и слушать с нуля.
+  Future<void> _resetToStartAfterPlaybackFinished() async {
+    try {
+      await _player.seek(Duration.zero);
+      await _player.pause();
+    } catch (_) {}
+    if (mounted) setState(() {});
   }
 
   Future<void> _bindSource() async {
@@ -157,6 +174,8 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
 
   @override
   void dispose() {
+    _playerStateSub?.cancel();
+    _playerStateSub = null;
     ChatVoicePlaybackHub.instance.deactivate(_player);
     unawaited(_player.dispose());
     try {
@@ -173,6 +192,13 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
       await _player.pause();
     } else {
       await ChatVoicePlaybackHub.instance.activate(_player);
+      final total = _player.duration;
+      if (total != null && total > Duration.zero) {
+        final pos = _player.position;
+        if (pos >= total - const Duration(milliseconds: 150)) {
+          await _player.seek(Duration.zero);
+        }
+      }
       await _player.play();
     }
     if (mounted) setState(() {});
@@ -207,7 +233,7 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Text(
           'Не удалось воспроизвести аудио',
-          style: AppTextStyle.base(13, color: widget.fg.withValues(alpha: 0.85)),
+          style: AppTextStyle.base(14, color: widget.fg.withValues(alpha: 0.85)),
         ),
       );
     }
@@ -217,15 +243,15 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
     final inactiveWave = widget.fg.withValues(alpha: 0.32);
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      constraints: const BoxConstraints(minWidth: 236, maxWidth: 320),
       child: SizedBox(
-        height: 44,
+        height: 48,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             SizedBox(
-              width: 42,
-              height: 42,
+              width: 46,
+              height: 46,
               child: Material(
                 color: widget.fg.withValues(alpha: 0.2),
                 shape: const CircleBorder(),
@@ -235,7 +261,7 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
                   child: Center(
                     child: _loadingSource
                         ? AppCircularProgressIndicator(
-                            dimension: 22,
+                            dimension: 24,
                             strokeWidth: 2,
                             color: widget.fg.withValues(alpha: 0.95),
                           )
@@ -246,7 +272,7 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
                               return Icon(
                                 playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                                 color: widget.fg.withValues(alpha: 0.96),
-                                size: 27,
+                                size: 29,
                               );
                             },
                           ),
@@ -275,7 +301,7 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
                             onTapDown: (d) => _seekFromLocalX(d.localPosition.dx, w),
                             onHorizontalDragUpdate: (d) => _seekFromLocalX(d.localPosition.dx, w),
                             child: SizedBox(
-                              height: 34,
+                              height: 38,
                               width: w,
                               child: CustomPaint(
                                 painter: _VoiceWaveformPainter(
@@ -284,7 +310,7 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
                                   activeColor: activeWave,
                                   inactiveColor: inactiveWave,
                                   gap: 2,
-                                  maxBarHeight: 28,
+                                  maxBarHeight: 31,
                                 ),
                               ),
                             ),
@@ -298,7 +324,7 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: 48,
+              width: 52,
               child: StreamBuilder<Duration>(
                 stream: _player.durationStream.map((d) => d ?? Duration.zero),
                 initialData: hint ?? Duration.zero,
@@ -323,7 +349,7 @@ class _ChatVoiceMessagePlayerState extends State<ChatVoiceMessagePlayer> {
                             overflow: TextOverflow.fade,
                             softWrap: false,
                             style: AppTextStyle.base(
-                              !playing && pos == Duration.zero ? 12 : 11,
+                              !playing && pos == Duration.zero ? 13 : 12,
                               color: widget.fg.withValues(alpha: !playing && pos == Duration.zero ? 0.78 : 0.72),
                               fontWeight: FontWeight.w600,
                             ),

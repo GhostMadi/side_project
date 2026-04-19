@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 export 'package:side_project/core/shared/ig_edit/ig_edit_models.dart'
     show PostImageEditParams, PostStyleFilter, PostStyleFilterUi;
@@ -13,6 +14,7 @@ class PostCreateSlot {
     File? displayFile,
     required this.isVideo,
     this.aspect = '1x1',
+    this.videoPosterJpeg,
   }) : displayFile = displayFile ?? originalFile;
 
   /// Полный файл с галереи — не перезаписывается при повторной обрезке.
@@ -26,13 +28,30 @@ class PostCreateSlot {
   /// Encoded into storage name as `__ar-<aspect>` (e.g. `1x1`, `9x16`).
   final String aspect;
 
-  PostCreateSlot copyWithDisplay(File newDisplay) =>
-      PostCreateSlot(originalFile: originalFile, displayFile: newDisplay, isVideo: isVideo, aspect: aspect);
+  /// User-selected JPEG cover for video (feed thumbnail); null until chosen or baked default.
+  final Uint8List? videoPosterJpeg;
+
+  PostCreateSlot copyWithDisplay(File newDisplay) => PostCreateSlot(
+        originalFile: originalFile,
+        displayFile: newDisplay,
+        isVideo: isVideo,
+        aspect: aspect,
+        videoPosterJpeg: videoPosterJpeg,
+      );
 
   PostCreateSlot copyWithAspect(String newAspect) => PostCreateSlot(
         originalFile: originalFile,
         displayFile: displayFile,
         isVideo: isVideo,
         aspect: newAspect,
+        videoPosterJpeg: videoPosterJpeg,
+      );
+
+  PostCreateSlot copyWithVideoPoster(Uint8List? poster) => PostCreateSlot(
+        originalFile: originalFile,
+        displayFile: displayFile,
+        isVideo: isVideo,
+        aspect: aspect,
+        videoPosterJpeg: poster,
       );
 }

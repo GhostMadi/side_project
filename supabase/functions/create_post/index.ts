@@ -6,7 +6,8 @@
 ///   description?: string,
 ///   cluster_id?: string | null,
 ///   aspect?: "9x16"|"1x1"|"3x4"|"16x9",
-///   media: Array<{ type: "image"|"video", mime: string, ext: string, base64: string, aspect?: "9x16"|"1x1"|"3x4"|"16x9" }>
+///   media: Array<{ type: "image"|"video", mime: string, ext: string, base64: string, aspect?: "9x16"|"1x1"|"3x4"|"16x9", poster_base64?: string }>
+///   For type "video", optional poster_base64 is a JPEG used as grid/detail preview cover.
 /// }
 ///
 /// Flow:
@@ -101,8 +102,14 @@ Deno.serve(async (req) => {
     }
 
     const postId = postRow.id as string;
-    const uploaded: Array<{ id: string; path: string; url: string; type: string; sort_order: number }> =
-      [];
+    const uploaded: Array<{
+      id: string;
+      path: string;
+      url: string;
+      type: string;
+      sort_order: number;
+      poster_url: string | null;
+    }> = [];
 
     // 2) upload media
     for (let i = 0; i < media.length; i++) {
@@ -145,7 +152,27 @@ Deno.serve(async (req) => {
       }
 
       const { data: pub } = supabase.storage.from("post_media").getPublicUrl(path);
-      uploaded.push({ id: mediaId, path, url: pub.publicUrl, type, sort_order: i });
+
+      let posterUrl: string | null = null;
+      if (type === "video") {
+        const posterRaw = (m as { poster_base64?: unknown }).poster_base64;
+        const posterBase64 =
+          typeof posterRaw === "string" && posterRaw.trim().length > 0 ? posterRaw.trim() : "";
+        if (posterBase64) {
+          const pBytes = toBytes(posterBase64);
+          const posterPath = `posts/${postId}/${mediaId}__poster.jpg`;
+          const { error: pErr } = await supabase.storage
+            .from("post_media")
+            .upload(posterPath, pBytes, { contentType: "image/jpeg", upsert: true });
+          if (pErr) {
+            return badRequest(`poster upload failed: ${pErr.message}`);
+          }
+          const { data: pPub } = supabase.storage.from("post_media").getPublicUrl(posterPath);
+          posterUrl = pPub.publicUrl;
+        }
+      }
+
+      uploaded.push({ id: mediaId, path, url: pub.publicUrl, type, sort_order: i, poster_url: posterUrl });
     }
 
     // 3) insert post_media rows
@@ -155,6 +182,7 @@ Deno.serve(async (req) => {
         url: u.url,
         type: u.type,
         sort_order: u.sort_order,
+        poster_url: u.poster_url,
       })),
     );
     if (pmErr) {

@@ -9,6 +9,7 @@ import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
 import 'package:side_project/core/shared/app_circular_progress_indicator.dart';
 import 'package:side_project/feature/chat/data/repository/chat_repository.dart';
+import 'package:side_project/feature/chat/presentation/chat_display_username.dart';
 
 @RoutePage()
 class ChatSearchPage extends StatefulWidget {
@@ -135,9 +136,10 @@ class _ChatSearchPageState extends State<ChatSearchPage> {
                       Divider(height: 1, color: AppColors.border.withValues(alpha: 0.55)),
                   itemBuilder: (context, i) {
                     final r = _results[i];
+                    final subNick = chatDisplayUsername(r.senderUsername);
                     return ListTile(
                       title: Text(r.text, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text('@${r.senderUsername}'),
+                      subtitle: Text(subNick.isNotEmpty ? subNick : r.senderUsername),
                       onTap: () => context.router.push(ChatThreadRoute(conversationId: r.conversationId)),
                     );
                   },

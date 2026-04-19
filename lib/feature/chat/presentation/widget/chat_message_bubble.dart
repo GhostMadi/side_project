@@ -60,7 +60,7 @@ class _ReplyQuoteBar extends StatelessWidget {
     /// Без [width: double.infinity]: иначе цитата растягивает весь пузырёк до maxWidth,
     /// и короткие ответы выглядят как одна длинная полоса на всю ширину.
     final core = Container(
-      padding: const EdgeInsets.only(left: 9, top: 2, bottom: 2, right: 4),
+      padding: const EdgeInsets.only(left: 10, top: 3, bottom: 3, right: 5),
       decoration: BoxDecoration(
         border: Border(left: BorderSide(color: fg.withValues(alpha: 0.45), width: 3)),
       ),
@@ -72,14 +72,14 @@ class _ReplyQuoteBar extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.base(12, color: fg.withValues(alpha: 0.72), fontWeight: FontWeight.w600),
+            style: AppTextStyle.base(13, color: fg.withValues(alpha: 0.72), fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 2),
           Text(
             subtitle,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyle.base(13, color: fg.withValues(alpha: 0.88), fontWeight: FontWeight.w500),
+            style: AppTextStyle.base(15, color: fg.withValues(alpha: 0.88), fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -315,7 +315,7 @@ class ChatMessageBubble extends StatelessWidget {
   /// Подряд со следующим сообщением того же отправителя.
   final bool groupWithNext;
 
-  static const _tickSize = 14.0;
+  static const _tickSize = 16.0;
 
   /// Скругление основных углов пузырька (было 17 — делаем мягче).
   static const _bubbleRadius = 24.0;
@@ -324,10 +324,10 @@ class ChatMessageBubble extends StatelessWidget {
   static const _bubbleTailRadius = 10.0;
 
   /// Углы у подряд идущих сообщений одного отправителя (середина цепочки).
-  static const _bubbleStackRadius = 12.0;
-  static const _padH = 11.0;
-  static const _padVTop = 8.0;
-  static const _padVBottom = 4.0;
+  static const _bubbleStackRadius = 14.0;
+  static const _padH = 14.0;
+  static const _padVTop = 10.0;
+  static const _padVBottom = 6.0;
 
   static Color _tickColor(Color fg, {double a = 0.88}) => fg.withValues(alpha: a);
 
@@ -393,7 +393,7 @@ class ChatMessageBubble extends StatelessWidget {
             replyHeader: replyHeader,
             body: Text(
               text,
-              style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
+              style: AppTextStyle.base(16, color: fg, fontWeight: FontWeight.w500),
             ),
             timeText: timeText,
             trailing: trailing,
@@ -417,7 +417,7 @@ class ChatMessageBubble extends StatelessWidget {
             replyHeader: replyHeader,
             body: Text(
               text.isEmpty ? '\u200b' : text,
-              style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
+              style: AppTextStyle.base(16, color: fg, fontWeight: FontWeight.w500),
             ),
             timeText: timeText,
             trailing: trailing,
@@ -465,7 +465,7 @@ class ChatMessageBubble extends StatelessWidget {
               replyHeader: replyHeader,
               body: Text(
                 displayText,
-                style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
+                style: AppTextStyle.base(16, color: fg, fontWeight: FontWeight.w500),
               ),
               timeText: timeText,
               trailing: Padding(padding: const EdgeInsets.only(bottom: 1), child: tick),
@@ -585,7 +585,7 @@ class _OptimisticOutgoingAlbum extends StatelessWidget {
       children: [
         if (visuals.length == 1)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
+            constraints: const BoxConstraints(maxWidth: 300),
             child: AspectRatio(
               aspectRatio: 1,
               child: ClipRRect(borderRadius: BorderRadius.circular(12), child: _thumb(visuals[0])),
@@ -593,7 +593,7 @@ class _OptimisticOutgoingAlbum extends StatelessWidget {
           )
         else if (visuals.length >= 3 && visuals.length.isOdd)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
+            constraints: const BoxConstraints(maxWidth: 300),
             child: _albumOddVisualCountLayout([
               for (final p in visuals)
                 ClipRRect(borderRadius: BorderRadius.circular(12), child: _thumb(p)),
@@ -601,7 +601,7 @@ class _OptimisticOutgoingAlbum extends StatelessWidget {
           )
         else if (visuals.length > 1)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
+            constraints: const BoxConstraints(maxWidth: 300),
             child: GridView.builder(
               padding: EdgeInsets.zero,
               shrinkWrap: true,
@@ -638,7 +638,7 @@ class _OptimisticOutgoingAlbum extends StatelessWidget {
             padding: EdgeInsets.only(top: visuals.isEmpty && audios.isEmpty && files.isEmpty ? 0 : 3),
             child: Text(
               cap,
-              style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
+              style: AppTextStyle.base(16, color: fg, fontWeight: FontWeight.w500),
             ),
           ),
       ],
@@ -674,9 +674,9 @@ class _OptimisticFileRow extends StatelessWidget {
                 name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.base(13, color: fg, fontWeight: FontWeight.w600),
+                style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w600),
               ),
-              Text('$mb МБ', style: AppTextStyle.base(11, color: fg.withValues(alpha: 0.75))),
+              Text('$mb МБ', style: AppTextStyle.base(12, color: fg.withValues(alpha: 0.75))),
             ],
           ),
         ),
@@ -781,11 +781,11 @@ class _TelegramBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.sizeOf(context);
-    final maxBubbleW = (mq.width * 0.78).clamp(140.0, 340.0);
+    final maxBubbleW = (mq.width * 0.82).clamp(160.0, 384.0);
 
     final fg = isMine ? AppColors.textInverse : AppColors.textColor;
     final metaStyle = AppTextStyle.base(
-      11,
+      12,
       color: fg.withValues(alpha: isMine ? 0.82 : 0.52),
       fontWeight: FontWeight.w500,
     );
@@ -1003,7 +1003,7 @@ class _ServerAlbumAndFiles extends StatelessWidget {
       children: [
         if (visuals.length == 1)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
+            constraints: const BoxConstraints(maxWidth: 300),
             child: AspectRatio(
               aspectRatio: 1,
               child: ClipRRect(
@@ -1014,7 +1014,7 @@ class _ServerAlbumAndFiles extends StatelessWidget {
           )
         else if (visuals.length >= 3 && visuals.length.isOdd)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
+            constraints: const BoxConstraints(maxWidth: 300),
             child: _albumOddVisualCountLayout([
               for (var i = 0; i < visuals.length; i++)
                 ClipRRect(
@@ -1028,7 +1028,7 @@ class _ServerAlbumAndFiles extends StatelessWidget {
           )
         else if (visuals.length > 1)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260),
+            constraints: const BoxConstraints(maxWidth: 300),
             child: GridView.builder(
               padding: EdgeInsets.zero,
               shrinkWrap: true,
@@ -1075,7 +1075,7 @@ class _ServerAlbumAndFiles extends StatelessWidget {
             padding: EdgeInsets.only(top: visuals.isEmpty && audios.isEmpty && files.isEmpty ? 0 : 3),
             child: Text(
               cap,
-              style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w500),
+              style: AppTextStyle.base(16, color: fg, fontWeight: FontWeight.w500),
             ),
           ),
       ],
@@ -1143,9 +1143,9 @@ class _FileRow extends StatelessWidget {
                 name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTextStyle.base(13, color: fg, fontWeight: FontWeight.w600),
+                style: AppTextStyle.base(14, color: fg, fontWeight: FontWeight.w600),
               ),
-              if (mb != null) Text('$mb МБ', style: AppTextStyle.base(11, color: fg.withValues(alpha: 0.75))),
+              if (mb != null) Text('$mb МБ', style: AppTextStyle.base(12, color: fg.withValues(alpha: 0.75))),
             ],
           ),
         ),

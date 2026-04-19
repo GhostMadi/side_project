@@ -156,11 +156,11 @@ return video(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect)?  image,TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect)?  video,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect)?  image,TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect,  Uint8List? posterJpeg)?  video,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Image() when image != null:
 return image(_that.bytes,_that.mime,_that.ext,_that.aspect);case _Video() when video != null:
-return video(_that.bytes,_that.mime,_that.ext,_that.aspect);case _:
+return video(_that.bytes,_that.mime,_that.ext,_that.aspect,_that.posterJpeg);case _:
   return orElse();
 
 }
@@ -178,11 +178,11 @@ return video(_that.bytes,_that.mime,_that.ext,_that.aspect);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect)  image,required TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect)  video,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect)  image,required TResult Function( Uint8List bytes,  String mime,  String ext,  String? aspect,  Uint8List? posterJpeg)  video,}) {final _that = this;
 switch (_that) {
 case _Image():
 return image(_that.bytes,_that.mime,_that.ext,_that.aspect);case _Video():
-return video(_that.bytes,_that.mime,_that.ext,_that.aspect);case _:
+return video(_that.bytes,_that.mime,_that.ext,_that.aspect,_that.posterJpeg);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -199,11 +199,11 @@ return video(_that.bytes,_that.mime,_that.ext,_that.aspect);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Uint8List bytes,  String mime,  String ext,  String? aspect)?  image,TResult? Function( Uint8List bytes,  String mime,  String ext,  String? aspect)?  video,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Uint8List bytes,  String mime,  String ext,  String? aspect)?  image,TResult? Function( Uint8List bytes,  String mime,  String ext,  String? aspect,  Uint8List? posterJpeg)?  video,}) {final _that = this;
 switch (_that) {
 case _Image() when image != null:
 return image(_that.bytes,_that.mime,_that.ext,_that.aspect);case _Video() when video != null:
-return video(_that.bytes,_that.mime,_that.ext,_that.aspect);case _:
+return video(_that.bytes,_that.mime,_that.ext,_that.aspect,_that.posterJpeg);case _:
   return null;
 
 }
@@ -287,13 +287,15 @@ as String?,
 
 
 class _Video implements PostCreateMediaItem {
-  const _Video({required this.bytes, required this.mime, required this.ext, this.aspect});
+  const _Video({required this.bytes, required this.mime, required this.ext, this.aspect, this.posterJpeg});
   
 
 @override final  Uint8List bytes;
 @override final  String mime;
 @override final  String ext;
 @override final  String? aspect;
+/// JPEG frame for feed/cover; optional (server may accept null for legacy).
+ final  Uint8List? posterJpeg;
 
 /// Create a copy of PostCreateMediaItem
 /// with the given fields replaced by the non-null parameter values.
@@ -305,16 +307,16 @@ _$VideoCopyWith<_Video> get copyWith => __$VideoCopyWithImpl<_Video>(this, _$ide
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Video&&const DeepCollectionEquality().equals(other.bytes, bytes)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.ext, ext) || other.ext == ext)&&(identical(other.aspect, aspect) || other.aspect == aspect));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Video&&const DeepCollectionEquality().equals(other.bytes, bytes)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.ext, ext) || other.ext == ext)&&(identical(other.aspect, aspect) || other.aspect == aspect)&&const DeepCollectionEquality().equals(other.posterJpeg, posterJpeg));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(bytes),mime,ext,aspect);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(bytes),mime,ext,aspect,const DeepCollectionEquality().hash(posterJpeg));
 
 @override
 String toString() {
-  return 'PostCreateMediaItem.video(bytes: $bytes, mime: $mime, ext: $ext, aspect: $aspect)';
+  return 'PostCreateMediaItem.video(bytes: $bytes, mime: $mime, ext: $ext, aspect: $aspect, posterJpeg: $posterJpeg)';
 }
 
 
@@ -325,7 +327,7 @@ abstract mixin class _$VideoCopyWith<$Res> implements $PostCreateMediaItemCopyWi
   factory _$VideoCopyWith(_Video value, $Res Function(_Video) _then) = __$VideoCopyWithImpl;
 @override @useResult
 $Res call({
- Uint8List bytes, String mime, String ext, String? aspect
+ Uint8List bytes, String mime, String ext, String? aspect, Uint8List? posterJpeg
 });
 
 
@@ -342,13 +344,14 @@ class __$VideoCopyWithImpl<$Res>
 
 /// Create a copy of PostCreateMediaItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? bytes = null,Object? mime = null,Object? ext = null,Object? aspect = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? bytes = null,Object? mime = null,Object? ext = null,Object? aspect = freezed,Object? posterJpeg = freezed,}) {
   return _then(_Video(
 bytes: null == bytes ? _self.bytes : bytes // ignore: cast_nullable_to_non_nullable
 as Uint8List,mime: null == mime ? _self.mime : mime // ignore: cast_nullable_to_non_nullable
 as String,ext: null == ext ? _self.ext : ext // ignore: cast_nullable_to_non_nullable
 as String,aspect: freezed == aspect ? _self.aspect : aspect // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,posterJpeg: freezed == posterJpeg ? _self.posterJpeg : posterJpeg // ignore: cast_nullable_to_non_nullable
+as Uint8List?,
   ));
 }
 

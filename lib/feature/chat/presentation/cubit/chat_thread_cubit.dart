@@ -393,6 +393,91 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     _applyPeerReadByPeerLocally();
   }
 
+  /// Проверка, что серверный [messageId] уже есть в ленте (в т.ч. внутри optimistic с [server]).
+  bool _itemsContainMessageId(List<ChatThreadItem> items, String normId) {
+    for (final it in items) {
+      final hit = it.when(
+        server: (d) => _normUuid(d.message.id) == normId,
+        optimisticText: (_, __, ___, ____, server, _, _, _, _) =>
+            server != null && _normUuid(server.message.id) == normId,
+        optimisticAttachments: (_, __, ___, ____, _____, server, _, _, _, _) =>
+            server != null && _normUuid(server.message.id) == normId,
+      );
+      if (hit) return true;
+    }
+    return false;
+  }
+
+  void _mergeSingleReferencingMessage(ChatMessageEnriched row) {
+    final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (s == null) return;
+    final nid = _normUuid(row.message.id);
+    if (nid == null) return;
+    if (_itemsContainMessageId(s.items, nid)) return;
+    final next = _dedupeOverlappingServerRows(
+      _sortedThreadItems([...s.items, ChatThreadItem.server(row)]),
+    );
+    _emitIfOpen(_withServerViewRevision(state, s.copyWith(items: next)));
+  }
+
+  Future<void> _awaitNotLoadingMore({bool Function()? shouldContinue}) async {
+    for (var i = 0; i < 120; i++) {
+      if (shouldContinue != null && !shouldContinue()) return;
+      final s = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (s == null) return;
+      if (!s.isLoadingMore) return;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
+
+  /// Подгружает старую историю, пока цитируемое сообщение не окажется в [ChatThreadState.loaded.items].
+  /// Сначала [getMessageEnriched] — если в БД нет, «по дате не нашлось» (клиент не скроллит).
+  /// [shouldContinue] — отмена, пока крутится пагинация (другой тап / жест).
+  Future<bool> ensureReferencedMessageInView(
+    String messageId, {
+    bool Function()? shouldContinue,
+  }) async {
+    final norm = _normUuid(messageId);
+    if (norm == null) return false;
+    final loaded0 = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    if (loaded0 == null) return false;
+
+    if (_itemsContainMessageId(loaded0.items, norm)) return true;
+
+    ChatMessageEnriched? remote;
+    try {
+      remote = await _repo.getMessageEnriched(messageId.trim());
+    } catch (_) {
+      return false;
+    }
+    if (remote == null) return false;
+    if (_normUuid(remote.message.conversationId) != _normUuid(loaded0.conversationId)) return false;
+
+    for (var page = 0; page < 48; page++) {
+      if (shouldContinue != null && !shouldContinue()) return false;
+      await _awaitNotLoadingMore(shouldContinue: shouldContinue);
+      if (shouldContinue != null && !shouldContinue()) return false;
+
+      final cur = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (cur == null) return false;
+
+      if (_itemsContainMessageId(cur.items, norm)) return true;
+
+      if (!cur.hasMore) {
+        _mergeSingleReferencingMessage(remote);
+        final after = state.maybeMap(loaded: (v) => v, orElse: () => null);
+        return after != null && _itemsContainMessageId(after.items, norm);
+      }
+
+      await loadMore();
+
+      final next = state.maybeMap(loaded: (v) => v, orElse: () => null);
+      if (next != null && _itemsContainMessageId(next.items, norm)) return true;
+    }
+
+    return false;
+  }
+
   void _beginOutgoingSendRpcGate() {
     _readReceiptDebounce?.cancel();
     _outstandingOutgoingSendRpc++;

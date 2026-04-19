@@ -1,9 +1,28 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/icons/app_icons.dart';
+import 'package:side_project/feature/chat/data/models/chat_conversation_enriched.dart';
+import 'package:side_project/feature/chat/presentation/cubit/chat_conversations_list_cubit.dart';
 import 'package:side_project/l10n/app_localizations.dart';
+
+/// Сколько диалогов с непрочитанным (не сумма сообщений).
+int _unreadConversationsCount(List<ChatConversationEnriched> items) {
+  var n = 0;
+  for (final e in items) {
+    if (e.unreadCount > 0) n++;
+  }
+  return n;
+}
+
+/// 1–9 как есть; с 10 чатов — «9+».
+String? _chatTabUnreadBadgeLabel(int unreadChats) {
+  if (unreadChats <= 0) return null;
+  if (unreadChats > 9) return '9+';
+  return '$unreadChats';
+}
 
 class AppBottomBar extends StatefulWidget {
   const AppBottomBar({super.key});
@@ -80,43 +99,55 @@ class _AppBottomBarState extends State<AppBottomBar> with SingleTickerProviderSt
           builder: (context, constraints) {
             const tabCount = 3;
             final segmentWidth = constraints.maxWidth / tabCount;
-            return Stack(
-              children: [
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeOutBack,
-                  left: currentIndex * segmentWidth,
-                  width: segmentWidth,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: Container(
-                      width: segmentWidth * 0.85,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: AppColors.bottomBarSegment,
-                        borderRadius: BorderRadius.circular(100),
+            return BlocBuilder<ChatConversationsListCubit, ChatConversationsListState>(
+              buildWhen: (p, c) => p != c,
+              builder: (context, convState) {
+                final unreadChats = convState.maybeMap(
+                  loaded: (s) => _unreadConversationsCount(s.items),
+                  orElse: () => 0,
+                );
+                final chatBadge = _chatTabUnreadBadgeLabel(unreadChats);
+
+                return Stack(
+                  children: [
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOutBack,
+                      left: currentIndex * segmentWidth,
+                      width: segmentWidth,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: Container(
+                          width: segmentWidth * 0.85,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: AppColors.bottomBarSegment,
+                            borderRadius: BorderRadius.circular(100),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Row(
-                  children: List.generate(tabCount, (index) {
-                    return _BottomItem(
-                      index: index,
-                      icon: _getIconForIndex(index),
-                      label: _getLabelForIndex(index, l10n),
-                      isSelected: currentIndex == index,
-                      onTap: () {
-                        if (currentIndex != index) {
-                          tabsRouter.setActiveIndex(index);
-                          _triggerJelly();
-                        }
-                      },
-                    );
-                  }),
-                ),
-              ],
+                    Row(
+                      children: List.generate(tabCount, (index) {
+                        return _BottomItem(
+                          index: index,
+                          icon: _getIconForIndex(index),
+                          label: _getLabelForIndex(index, l10n),
+                          isSelected: currentIndex == index,
+                          badgeLabel: index == 1 ? chatBadge : null,
+                          onTap: () {
+                            if (currentIndex != index) {
+                              tabsRouter.setActiveIndex(index);
+                              _triggerJelly();
+                            }
+                          },
+                        );
+                      }),
+                    ),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -141,11 +172,49 @@ class _AppBottomBarState extends State<AppBottomBar> with SingleTickerProviderSt
   }
 }
 
+class _UnreadChatsTabBadge extends StatelessWidget {
+  const _UnreadChatsTabBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final two = label.length > 1;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: two ? 3.5 : 5, vertical: 1.5),
+      constraints: const BoxConstraints(minWidth: 17, minHeight: 16),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF3B30),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.bottomBarColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 3, offset: const Offset(0, 1)),
+        ],
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: two ? 8.5 : 10,
+          fontWeight: FontWeight.w800,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
 class _BottomItem extends StatefulWidget {
   final int index;
   final IconData icon;
   final String label;
   final bool isSelected;
+
+  /// Число непрочитанных **диалогов** для вкладки чата (строка уже отформатирована: «3» или «9+»).
+  final String? badgeLabel;
+
   final VoidCallback onTap;
 
   const _BottomItem({
@@ -154,6 +223,7 @@ class _BottomItem extends StatefulWidget {
     required this.label,
     required this.isSelected,
     required this.onTap,
+    this.badgeLabel,
   });
 
   @override
@@ -218,14 +288,37 @@ class _BottomItemState extends State<_BottomItem> with SingleTickerProviderState
                     },
                   );
                 },
-                child: Icon(
-                  widget.icon,
+                child: SizedBox(
                   key: ValueKey<bool>(widget.isSelected),
-                  size: widget.isSelected ? 26 : 22,
-                  color: widget.isSelected ? AppColors.bottomBarActiveIcon : AppColors.bottomBarInactiveIcon,
-                  shadows: widget.isSelected
-                      ? [Shadow(color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.6), blurRadius: 10)]
-                      : null,
+                  width: 34,
+                  height: 26,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        widget.icon,
+                        size: widget.isSelected ? 26 : 22,
+                        color: widget.isSelected
+                            ? AppColors.bottomBarActiveIcon
+                            : AppColors.bottomBarInactiveIcon,
+                        shadows: widget.isSelected
+                            ? [
+                                Shadow(
+                                  color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.6),
+                                  blurRadius: 10,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      if (widget.badgeLabel != null)
+                        Positioned(
+                          right: -4,
+                          top: -6,
+                          child: _UnreadChatsTabBadge(label: widget.badgeLabel!),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               if (widget.isSelected)

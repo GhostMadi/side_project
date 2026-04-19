@@ -10,6 +10,7 @@ abstract class PostMediaModel with _$PostMediaModel {
     required String id,
     @JsonKey(name: 'post_id') required String postId,
     required String url,
+    @JsonKey(name: 'poster_url') String? posterUrl,
     @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson)
     required PostMediaType type,
     @JsonKey(name: 'sort_order') required int sortOrder,

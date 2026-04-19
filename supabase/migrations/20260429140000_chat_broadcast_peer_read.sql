@@ -1,5 +1,6 @@
 -- Мгновенное обновление галочек «прочитано» у отправителя: broadcast на тот же topic, что и message_enriched.
 -- Клиент: channel name = 'chat_thread_' || conversation_id, event = 'peer_read'.
+-- Обзор всех миграций чата и цепочки Realtime: migrations/_chat/README.md (раздел «Realtime и прочитано»).
 
 create or replace function public.chat_broadcast_peer_read_after_update()
 returns trigger

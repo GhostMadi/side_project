@@ -82,8 +82,15 @@
 | `20260422140000_chat_relax_storage_attach_cap.sql` | Коррекция лимитов Storage для вложений. |
 | `20260423120000_chat_get_message_enriched.sql` | `get_message_enriched` — одно сообщение в формате списка. |
 | `20260423180000_chat_realtime_publication.sql` | Таблицы чата в `supabase_realtime` для `postgres_changes`. |
-| `20260425120000_chat_broadcast_message_enriched.sql` | Broadcast `message_enriched` после INSERT. |
+| `20260425120000_chat_broadcast_message_enriched.sql` | Broadcast `message_enriched` после INSERT (`realtime.send` на `chat_thread_<conversation_id>`). |
 | `20260425180000_chat_client_message_id.sql` | `client_message_id`, reconcile оптимистичных отправок. |
+| `20260426100000_chat_read_by_peer.sql` (+ `…26110000…`) | Поле `read_by_peer` в enriched-сообщениях. |
+| `20260426120000_chat_child_tables_conversation_id.sql` | `conversation_id` на дочерних таблицах сообщений. |
+| `20260426130000_chat_participants_replica_identity_full.sql` (+ `20260429120000_ensure_chat_participants_replica_identity_full.sql`) | `REPLICA IDENTITY FULL` на `chat_participants` для полноты WAL/Realtime UPDATE. |
+| `20260427120000_chat_participants_select_no_rls_recursion.sql` | Политика SELECT без рекурсии RLS. |
+| `20260427130000_chat_participants_grant_select_authenticated.sql` | `GRANT SELECT` для REST peer-курсоров. |
+| `20260428120000_mark_conversation_read_monotonic_cursor.sql` | Монотонный курсор в `mark_conversation_read`. |
+| `20260429140000_chat_broadcast_peer_read.sql` | Broadcast `peer_read` при сдвиге read-курсора (мгновенные галочки у отправителя). |
 
 ### Ленты / RPC (часть)
 - `20260411150000_list_user_feed_enriched_rpc.sql`, `20260411160000_hot_feed_enriched_profile_cursor.sql`, `20260416120000_user_feed_cluster_filter.sql` и др. — см. имена файлов в `supabase/migrations/`.

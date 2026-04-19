@@ -46,7 +46,7 @@ supabase secrets set SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROL
 - Посты: `migrations/_posts/README.md`
 - Комментарии: `migrations/_comments/README.md`
 - Кластеры: `migrations/_clusters/README.md`
-- **Чат и сообщения**: `migrations/_chat/README.md`
+- **Чат и сообщения**: `migrations/_chat/README.md` (в т.ч. **Realtime**: `postgres_changes`, broadcast **`message_enriched`** / **`peer_read`**, read receipts).
 
 Быстрые ссылки на первые файлы домена:
 

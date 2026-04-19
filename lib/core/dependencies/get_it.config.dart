@@ -19,6 +19,7 @@ import '../../feature/account_page/presentation/cubit/account_hibernate_reset_cu
     as _i583;
 import '../../feature/archive_page/presentation/cubit/archived_posts_cubit.dart'
     as _i258;
+import '../../feature/chat/data/messenger_user_search_service.dart' as _i159;
 import '../../feature/chat/data/repository/chat_repository.dart' as _i425;
 import '../../feature/chat/data/repository/chat_repository_impl.dart' as _i188;
 import '../../feature/chat/presentation/cubit/chat_conversations_list_cubit.dart'
@@ -259,6 +260,12 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i721.ClusterCreateCubit>(
       () => _i721.ClusterCreateCubit(gh<_i312.ClusterRepository>()),
+    );
+    gh.lazySingleton<_i159.MessengerUserSearchService>(
+      () => _i159.MessengerUserSearchService(
+        gh<_i42.ProfileRepository>(),
+        gh<_i838.FollowListRepository>(),
+      ),
     );
     gh.lazySingleton<_i314.PostCreateRepository>(
       () => _i314.PostCreateRepositoryImpl(

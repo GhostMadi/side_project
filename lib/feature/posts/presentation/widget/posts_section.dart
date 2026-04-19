@@ -4,6 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/shared/app_shimmer.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
+import 'package:side_project/feature/posts/data/models/post_media_type.dart';
 import 'package:side_project/feature/posts/data/models/post_model.dart';
 
 String postHeroTag(String postId) => 'post_hero_$postId';
@@ -160,8 +161,20 @@ class _PostTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = post.media.isNotEmpty ? post.media.first.url : null;
-    final hasUrl = url != null && url.trim().isNotEmpty;
+    final first = post.media.isNotEmpty ? post.media.first : null;
+    String? previewUrl;
+    if (first != null) {
+      final raw = first.url.trim();
+      if (raw.isNotEmpty) {
+        if (first.type == PostMediaType.video) {
+          final p = first.posterUrl?.trim();
+          previewUrl = (p != null && p.isNotEmpty) ? p : null;
+        } else {
+          previewUrl = raw;
+        }
+      }
+    }
+    final hasUrl = previewUrl != null && previewUrl.isNotEmpty;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(_radius),
@@ -193,7 +206,7 @@ class _PostTile extends StatelessWidget {
                   child: !hasUrl
                       ? const PostMediaFramePlaceholder(shimmer: true)
                       : CachedNetworkImage(
-                          imageUrl: url.trim(),
+                          imageUrl: previewUrl.trim(),
                           fit: BoxFit.cover,
                           placeholder: (_, __) => const PostMediaFramePlaceholder(shimmer: true),
                           errorWidget: (_, __, ___) => const PostMediaFramePlaceholder(shimmer: false),
