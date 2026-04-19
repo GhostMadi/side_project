@@ -427,7 +427,8 @@ class _ChatThreadResumeSync extends StatefulWidget {
 }
 
 class _ChatThreadResumeSyncState extends State<_ChatThreadResumeSync> with WidgetsBindingObserver {
-  static const _peerCursorPollInterval = Duration(seconds: 15);
+  /// Запасной REST, если broadcast `peer_read` или postgres_changes не дошли (основной путь — WS broadcast).
+  static const _peerCursorPollInterval = Duration(seconds: 90);
 
   Timer? _peerCursorPoll;
 

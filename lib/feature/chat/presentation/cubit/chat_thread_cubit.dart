@@ -1263,6 +1263,50 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     } catch (_) {}
   }
 
+  Map<String, dynamic>? _unwrapBroadcastPeerReadPayload(Map<String, dynamic> raw) {
+    if (raw.containsKey('conversation_id') && raw.containsKey('user_id')) return raw;
+    final p = raw['payload'];
+    if (p is Map<String, dynamic>) return _unwrapBroadcastPeerReadPayload(p);
+    if (p is Map) return _unwrapBroadcastPeerReadPayload(Map<String, dynamic>.from(p));
+    final r = raw['record'];
+    if (r is Map<String, dynamic>) return _unwrapBroadcastPeerReadPayload(r);
+    if (r is Map) return _unwrapBroadcastPeerReadPayload(Map<String, dynamic>.from(r));
+    return null;
+  }
+
+  /// Тот же канал Realtime Broadcast, что и `message_enriched`: курсор собеседника без ожидания postgres_changes.
+  void _onBroadcastPeerRead(Map<String, dynamic> raw) {
+    final map = _unwrapBroadcastPeerReadPayload(raw);
+    if (map == null) {
+      ChatReadReceiptDebugLog.d('broadcast peer_read: unwrap failed rawKeys=${raw.keys.join(',')}');
+      return;
+    }
+    final convRaw = map['conversation_id']?.toString().trim();
+    final uidRow = _normUuid(map['user_id']?.toString());
+    final lrTrim = map['last_read_message_id']?.toString().trim();
+    final loaded = state.maybeMap(loaded: (v) => v, orElse: () => null);
+    final myId = _normUuid(_client.auth.currentUser?.id);
+    final convNorm = convRaw == null ? null : _normUuid(convRaw);
+    final loadedCid = loaded == null ? null : _normUuid(loaded.conversationId);
+
+    ChatReadReceiptDebugLog.d(
+      'broadcast peer_read: conv=$convNorm loaded=$loadedCid peer=$uidRow lr=$lrTrim',
+    );
+
+    if (loaded == null || convNorm == null || loadedCid == null || convNorm != loadedCid) return;
+    if (uidRow == null || uidRow.isEmpty || myId == null || myId.isEmpty) return;
+    if (uidRow == myId) return;
+
+    _peerLastReadByUserId[uidRow] =
+        lrTrim == null || lrTrim.isEmpty ? null : (_normUuid(lrTrim) ?? lrTrim.toLowerCase());
+    ChatReadReceiptDebugLog.d('broadcast peer_read → apply peer=$uidRow last_read=$lrTrim');
+    if (!_peerReadMapReady) {
+      ChatReadReceiptDebugLog.d('broadcast peer_read: defer UI until peerReadMapReady');
+      return;
+    }
+    _applyPeerReadByPeerLocally();
+  }
+
   Future<void> _syncPeerReadCursorsFromServer(String conversationId) async {
     try {
       final cid = conversationId.trim();
@@ -1490,10 +1534,11 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
     return true;
   }
 
-  /// Realtime по этому каналу: новые сообщения (`chat_messages`) и **прочитано собеседником** —
-  /// это `UPDATE` в `chat_participants` у другого участника (`last_read_message_id`).
-  /// Отдельный REST по курсорам только при [load]/[refresh] (начальный снимок); после открытия треда —
-  /// только события WS + локальный патч [_applyPeerReadByPeerLocally].
+  /// Realtime по этому каналу:
+  /// — новые сообщения: postgres_changes на `chat_messages` + broadcast `message_enriched`;
+  /// — галочки «прочитано»: broadcast `peer_read` (мгновенно, как сообщения) и дублирующий путь
+  ///   postgres_changes на `chat_participants`;
+  /// — начальный снимок курсоров: REST при [load]/[refresh]; локальный патч [_applyPeerReadByPeerLocally].
   void _subscribeRealtime(String conversationId) {
     _channel?.unsubscribe();
     final cid = conversationId.trim().toLowerCase();
@@ -1579,7 +1624,8 @@ class ChatThreadCubit extends Cubit<ChatThreadState> {
         filter: convFilter,
         callback: (_) => _scheduleDebouncedFullRefresh(),
       )
-      ..onBroadcast(event: 'message_enriched', callback: _onBroadcastMessageEnriched);
+      ..onBroadcast(event: 'message_enriched', callback: _onBroadcastMessageEnriched)
+      ..onBroadcast(event: 'peer_read', callback: _onBroadcastPeerRead);
 
     _channel!.subscribe((status, err) {
       ChatReadReceiptDebugLog.d(
