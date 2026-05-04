@@ -6,8 +6,14 @@ part 'post_create_draft.freezed.dart';
 @freezed
 abstract class PostCreateDraft with _$PostCreateDraft {
   const factory PostCreateDraft({
+    /// Optional marker to attach this post to (`markers.post_id`).
+    String? markerId,
+    /// Optional per-post session time (within marker lifetime).
+    DateTime? eventTime,
+
+    /// Optional per-post session duration in minutes (<= 24h).
+    int? durationMinutes,
     String? title,
-    String? subtitle,
     String? description,
     String? clusterId,
     @Default([]) List<PostCreateMediaItem> media,

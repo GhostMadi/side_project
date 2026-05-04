@@ -1,10 +1,10 @@
 // Карта: Yandex MapKit (плагин yandex_mapkit). Ключ API — в MainApplication.kt / AppDelegate.swift.
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/shared/service/generate_marker_.dart';
 import 'package:yandex_mapkit/yandex_mapkit.dart';
 
@@ -12,24 +12,14 @@ import 'package:yandex_mapkit/yandex_mapkit.dart';
 typedef AppMapController = YandexMapController;
 
 const _kMapIconSizeSingle = 0.5;
-const _kMapIconSizeScatter = 0.36;
-
 /// Множитель к [iconSize] для [PlacemarkIconStyle.scale] (Yandex). Меньше — мельче маркеры на карте.
 const double _kYandexMarkerScaleMul = 1.8;
-
-const int _kCylinderMaxHalfWidth = 2;
-const double _kCylinderAngleStepRad = 0.30;
-const double _kCylinderRadiusY = 20.0;
-const double _kCylinderDepthX = 12.5;
-const double _kCylinderTiltDegPerSlot = 6.2;
-const double _kCylinderCenterMagnification = 1.2;
-const int _kCylinderVirtualUrlRepeatCount = 3;
 
 /// При ≥ этого числа маркеров — компактный декод bitmap и реже обновление слоя (меньше греется устройство).
 const int _kManyMarkersThreshold = 36;
 
 List<String> _normalizedPhotoUrls(MapMarker m) {
-  final fromList = m.imageUrls.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  final fromList = m.imageUrls.map((e) => e.trim()).where((e) => e.isNotEmpty).take(4).toList();
   if (fromList.isNotEmpty) {
     return fromList;
   }
@@ -40,26 +30,9 @@ List<String> _normalizedPhotoUrls(MapMarker m) {
   return const [];
 }
 
-int _wrapGalleryIndex(int i, int n) => ((i % n) + n) % n;
-
-({double dx, double dy, double rotate, double iconSize, double opacity, double symbolSortKey})
-_cylinderReelSlotLayout(int slot, int halfWidth, MapPhotoMarkerStyle style) {
-  assert(halfWidth >= 1);
-  assert(slot.abs() <= halfWidth);
-  final theta = slot * _kCylinderAngleStepRad;
-  final dy = _kCylinderRadiusY * math.sin(theta);
-  final dx = _kCylinderDepthX * (1.0 - math.cos(theta)) * (slot >= 0 ? 1.0 : -1.0);
-  final rotate = -slot * _kCylinderTiltDegPerSlot;
-  final depthScale = math.cos(theta).clamp(0.40, 1.0);
-  final base = switch (style) {
-    MapPhotoMarkerStyle.polaroid => 0.56,
-    MapPhotoMarkerStyle.card => _kMapIconSizeScatter * 1.12,
-  };
-  final iconSize = base * _kCylinderCenterMagnification * depthScale;
-  final edge = halfWidth <= 0 ? 0.0 : slot.abs() / halfWidth;
-  final opacity = (1.0 - edge * 0.62).clamp(0.30, 1.0);
-  final symbolSortKey = 200.0 + (halfWidth - slot.abs()) * 40.0;
-  return (dx: dx, dy: dy, rotate: rotate, iconSize: iconSize, opacity: opacity, symbolSortKey: symbolSortKey);
+int _mapHiddenPostsBeyondPreviews(MapMarker m, List<String> previewUrls) {
+  if (m.markerPostCount <= previewUrls.length) return 0;
+  return m.markerPostCount - previewUrls.length;
 }
 
 List<_DrawSpec> _buildDrawSpecs(List<MapMarker> markers) {
@@ -67,7 +40,32 @@ List<_DrawSpec> _buildDrawSpecs(List<MapMarker> markers) {
   final many = markers.length >= _kManyMarkersThreshold;
   for (final m in markers) {
     final urls = _normalizedPhotoUrls(m);
+    final hiddenPlus = _mapHiddenPostsBeyondPreviews(m, urls);
+
     if (urls.isEmpty) {
+      final isUser = m.isMapUserLocation;
+      if (!isUser && m.markerPostCount > 1) {
+        /// Несколько постов, ни у одного медиа в превью — эмодзи + счётчик.
+        out.add(
+          _DrawSpec(
+            trackId: m.id,
+            lat: m.lat,
+            lng: m.lng,
+            emoji: m.emoji,
+            tapMarker: m,
+            imageUrl: null,
+            emojiOnlyLinkedPosts: m.markerPostCount,
+            pinFootLine: m.pinFootLine,
+            iconOffset: null,
+            iconRotate: null,
+            symbolSortKey: 0,
+            iconSize: _kMapIconSizeSingle,
+            photoStyle: m.photoStyle,
+            isMapUserLocation: false,
+          ),
+        );
+        continue;
+      }
       out.add(
         _DrawSpec(
           trackId: m.id,
@@ -76,89 +74,81 @@ List<_DrawSpec> _buildDrawSpecs(List<MapMarker> markers) {
           emoji: m.emoji,
           tapMarker: m,
           imageUrl: null,
+          pinFootLine: m.pinFootLine,
           iconOffset: null,
           iconRotate: null,
-          symbolSortKey: 0,
-          iconSize: _kMapIconSizeSingle,
+          // Снизу по z-order: визуально «под» маркерами с бэка, чтобы тап попадал в событие на той же точке.
+          symbolSortKey: isUser ? -1000.0 : 0,
+          iconSize: isUser ? 0.56 : _kMapIconSizeSingle,
           photoStyle: m.photoStyle,
+          isMapUserLocation: isUser,
         ),
       );
       continue;
     }
-    // Одна картинка — всегда один плакемарк: и card, и polaroid (без тяжёлого цилиндра polaroid).
-    if (urls.length == 1) {
-      final effectiveStyle = many ? MapPhotoMarkerStyle.card : m.photoStyle;
+
+    // Сетка 2–4 превью (мульти-пост).
+    if (urls.length >= 2) {
       out.add(
         _DrawSpec(
           trackId: m.id,
           lat: m.lat,
           lng: m.lng,
           emoji: m.emoji,
-          tapMarker: MapMarker(
-            id: m.id,
-            lat: m.lat,
-            lng: m.lng,
-            emoji: m.emoji,
-            imageUrl: urls.first,
-            metadata: {...?m.metadata, 'photoGallery': urls, 'photoGalleryIndex': 0},
-            photoStyle: effectiveStyle,
-          ),
-          imageUrl: urls.first,
+          tapMarker: m,
+          imageUrl: null,
+          compositeGridUrls: urls,
+          gridOverflowPlus: hiddenPlus,
           iconOffset: null,
           iconRotate: null,
-          symbolSortKey: 0,
+          symbolSortKey: 2,
           iconSize: _kMapIconSizeSingle,
-          photoStyle: effectiveStyle,
+          photoStyle: MapPhotoMarkerStyle.card,
           compactDecode: many,
         ),
       );
       continue;
     }
 
-    final galleryUrls = urls;
-    final layoutUrls = urls.length == 1
-        ? List<String>.generate(_kCylinderVirtualUrlRepeatCount, (_) => urls.first)
-        : urls;
-    final n = layoutUrls.length;
-    final halfW = math.min(_kCylinderMaxHalfWidth, math.max(1, n - 1));
-    final centerIdx = n ~/ 2;
-    for (var s = -halfW; s <= halfW; s++) {
-      final imageIdx = _wrapGalleryIndex(centerIdx + s, n);
-      final url = layoutUrls[imageIdx];
-      final cyl = _cylinderReelSlotLayout(s, halfW, m.photoStyle);
-      final tapGalleryIndex = galleryUrls.length == 1 ? 0 : imageIdx;
-      out.add(
-        _DrawSpec(
-          trackId: '${m.id}__cyl_$s',
+    // Ровно одно превью-изображение.
+    final effectiveStyle = many ? MapPhotoMarkerStyle.card : m.photoStyle;
+    out.add(
+      _DrawSpec(
+        trackId: m.id,
+        lat: m.lat,
+        lng: m.lng,
+        emoji: m.emoji,
+        tapMarker: MapMarker(
+          id: m.id,
           lat: m.lat,
           lng: m.lng,
           emoji: m.emoji,
-          tapMarker: MapMarker(
-            id: m.id,
-            lat: m.lat,
-            lng: m.lng,
-            emoji: m.emoji,
-            imageUrl: url,
-            metadata: {...?m.metadata, 'photoGallery': galleryUrls, 'photoGalleryIndex': tapGalleryIndex},
-            photoStyle: m.photoStyle,
-          ),
-          imageUrl: url,
-          iconOffset: [cyl.dx, cyl.dy],
-          iconRotate: cyl.rotate,
-          symbolSortKey: cyl.symbolSortKey,
-          iconSize: cyl.iconSize,
-          iconOpacity: cyl.opacity,
-          photoStyle: m.photoStyle,
+          imageUrl: urls.first,
+          metadata: {...?m.metadata, 'photoGallery': urls, 'photoGalleryIndex': 0},
+          photoStyle: effectiveStyle,
+          isMapUserLocation: m.isMapUserLocation,
+          markerPostCount: m.markerPostCount,
+          pinFootLine: m.pinFootLine,
         ),
-      );
-    }
+        imageUrl: urls.first,
+        singlePhotoPlusBadge: hiddenPlus,
+        iconOffset: null,
+        iconRotate: null,
+        symbolSortKey: 1,
+        iconSize: _kMapIconSizeSingle,
+        photoStyle: effectiveStyle,
+        compactDecode: many,
+      ),
+    );
   }
   return out;
 }
 
 String _drawSpecSignature(_DrawSpec s) {
   final off = s.iconOffset;
-  return '${s.trackId};${s.lat};${s.lng};${s.imageUrl ?? s.emoji};${off?.join(',')};${s.iconRotate};${s.symbolSortKey};${s.iconSize};${s.iconOpacity};${s.photoStyle.name};${s.compactDecode}';
+  final grid = s.compositeGridUrls?.join('~');
+  final foot = s.pinFootLine ?? '';
+  return '${s.trackId};${s.lat};${s.lng};${grid ?? ''};${s.gridOverflowPlus};${s.singlePhotoPlusBadge};${s.emojiOnlyLinkedPosts ?? '_'};${s.imageUrl ?? s.emoji};${off?.join(',')};${s.iconRotate};${s.symbolSortKey};${s.iconSize};${s.photoStyle.name};${s.compactDecode};${s.isMapUserLocation};f=$foot';
 }
 
 enum MapPhotoMarkerStyle { card, polaroid }
@@ -173,6 +163,15 @@ class MapMarker {
   final Map<String, dynamic>? metadata;
   final MapPhotoMarkerStyle photoStyle;
 
+  /// Метка «моё положение» — рисуется [MarkerGeneratorService.createMapUserLocationMarker], не эмодзи.
+  final bool isMapUserLocation;
+
+  /// Сколько постов привязано к маркеру ([marker_posts]); 0 — пустой пин только с эмодзи/cover с бэка.
+  final int markerPostCount;
+
+  /// Короткая подпись над круглым пином (время / «19:00 · 3») — чтобы на карте было понятно «что за точка».
+  final String? pinFootLine;
+
   MapMarker({
     required this.id,
     required this.lat,
@@ -182,6 +181,9 @@ class MapMarker {
     this.imageUrls = const [],
     this.metadata,
     this.photoStyle = MapPhotoMarkerStyle.card,
+    this.isMapUserLocation = false,
+    this.markerPostCount = 0,
+    this.pinFootLine,
   });
 }
 
@@ -193,13 +195,18 @@ class _DrawSpec {
     required this.emoji,
     required this.tapMarker,
     this.imageUrl,
+    this.emojiOnlyLinkedPosts,
+    this.pinFootLine,
+    this.compositeGridUrls,
+    this.gridOverflowPlus = 0,
+    this.singlePhotoPlusBadge = 0,
     this.iconOffset,
     this.iconRotate,
     this.symbolSortKey = 0,
     this.iconSize = _kMapIconSizeSingle,
-    this.iconOpacity = 1.0,
     this.photoStyle = MapPhotoMarkerStyle.card,
     this.compactDecode = false,
+    this.isMapUserLocation = false,
   });
 
   final String trackId;
@@ -208,13 +215,32 @@ class _DrawSpec {
   final String emoji;
   final MapMarker tapMarker;
   final String? imageUrl;
+  /// >1 — дорисовать [MarkerGeneratorService.createEmojiMarkerWithLinkedPostCount].
+  final int? emojiOnlyLinkedPosts;
+  /// См. [MapMarker.pinFootLine] — только для эмодзи-пинов.
+  final String? pinFootLine;
+  final List<String>? compositeGridUrls;
+  final int gridOverflowPlus;
+  final int singlePhotoPlusBadge;
   final List<double>? iconOffset;
   final double? iconRotate;
   final double symbolSortKey;
   final double iconSize;
-  final double iconOpacity;
   final MapPhotoMarkerStyle photoStyle;
   final bool compactDecode;
+  final bool isMapUserLocation;
+}
+
+/// Дополнительные кнопки под [+] / [−] (тот же визуальный ряд, справа по центру).
+class AppMapChromeAction {
+  const AppMapChromeAction({required this.icon, this.tooltip, required this.onPressed, this.iconColor});
+
+  final IconData icon;
+  final String? tooltip;
+  final VoidCallback onPressed;
+
+  /// Если null — цвет по умолчанию для кромки карты ([AppColors.textColor]).
+  final Color? iconColor;
 }
 
 class AppMapWidget extends StatefulWidget {
@@ -237,6 +263,9 @@ class AppMapWidget extends StatefulWidget {
   final VoidCallback? onMapBackPressed;
   final bool deferMarkerSyncUntilMapIdle;
 
+  /// См. [AppMapChromeAction] — рисуются **под** зум-контролем.
+  final List<AppMapChromeAction> rightColumnExtraActions;
+
   const AppMapWidget({
     super.key,
     required this.markers,
@@ -253,6 +282,7 @@ class AppMapWidget extends StatefulWidget {
     this.onMapReady,
     this.onMapBackPressed,
     this.deferMarkerSyncUntilMapIdle = false,
+    this.rightColumnExtraActions = const [],
   });
 
   @override
@@ -285,7 +315,9 @@ class _AppMapWidgetState extends State<AppMapWidget> {
     if (markers.isEmpty) return '0';
     final b = StringBuffer()..write(markers.length);
     for (final m in markers) {
-      b.write('|${m.id};${m.lat};${m.lng};');
+      b.write('|${m.id};${m.lat};${m.lng};mpc=${m.markerPostCount};');
+      b.write(m.pinFootLine ?? '');
+      b.write(m.isMapUserLocation ? 'u' : 'e');
       final u = m.imageUrl?.trim();
       if (u != null && u.isNotEmpty) b.write(u);
       for (final x in m.imageUrls) {
@@ -312,21 +344,60 @@ class _AppMapWidgetState extends State<AppMapWidget> {
     } catch (_) {}
   }
 
-  static Future<Uint8List?> _decodeMarkerImage(_DrawSpec s) async {
+  static Future<({Uint8List? image, double anchorY})> _decodeMarkerImage(_DrawSpec s) async {
+    if (s.isMapUserLocation) {
+      final u = await MarkerGeneratorService.createMapUserLocationMarker();
+      return (image: u, anchorY: 0.5);
+    }
+    final cu = s.compositeGridUrls;
+    if (cu != null && cu.length >= 2) {
+      final g = await MarkerGeneratorService.createMapMultiPostGridFromUrls(
+        cu,
+        overflowPlus: s.gridOverflowPlus,
+        compact: s.compactDecode,
+      );
+      if (g != null) return (image: g, anchorY: 0.5);
+    }
     final url = s.imageUrl?.trim();
     if (url != null && url.isNotEmpty) {
       if (s.compactDecode) {
-        final c = await MarkerGeneratorService.createPhotoMarkerFromUrl(url, compact: true);
-        if (c != null) return c;
+        final c = await MarkerGeneratorService.createPhotoMarkerFromUrl(
+          url,
+          compact: true,
+          mapPlusBadge: s.singlePhotoPlusBadge,
+        );
+        if (c != null) return (image: c, anchorY: 0.5);
       } else {
         final Uint8List? photo = switch (s.photoStyle) {
           MapPhotoMarkerStyle.polaroid => await MarkerGeneratorService.createPolaroidPhotoMarkerFromUrl(url),
-          MapPhotoMarkerStyle.card => await MarkerGeneratorService.createPhotoMarkerFromUrl(url),
+          MapPhotoMarkerStyle.card =>
+            await MarkerGeneratorService.createPhotoMarkerFromUrl(
+              url,
+              compact: false,
+              mapPlusBadge: s.singlePhotoPlusBadge,
+            ),
         };
-        if (photo != null) return photo;
+        if (photo != null) return (image: photo, anchorY: 0.5);
       }
     }
-    return MarkerGeneratorService.createEmojiMarker(s.emoji);
+
+    final el = s.emojiOnlyLinkedPosts;
+    if (el != null && el > 1) {
+      final eb = await MarkerGeneratorService.createEmojiMarkerWithLinkedPostCount(s.emoji, linkedPostCount: el);
+      if (eb != null) return await _maybePinTopFootLine(s, eb);
+    }
+
+    final plain = await MarkerGeneratorService.createEmojiMarker(s.emoji);
+    return _maybePinTopFootLine(s, plain);
+  }
+
+  /// Подпись над эмодзи-пином; якорь — центр исходного круга на новой высоте bitmap.
+  static Future<({Uint8List? image, double anchorY})> _maybePinTopFootLine(_DrawSpec s, Uint8List? base) async {
+    final foot = s.pinFootLine?.trim();
+    if (base == null) return (image: null, anchorY: 0.5);
+    if (foot == null || foot.isEmpty) return (image: base, anchorY: 0.5);
+    final r = await MarkerGeneratorService.composePinTopFootLine(basePng: base, footLine: foot);
+    return (image: r.bytes, anchorY: r.anchorY);
   }
 
   Future<void> _syncMarkers() async {
@@ -362,20 +433,23 @@ class _AppMapWidgetState extends State<AppMapWidget> {
       final s = specs[i];
       if (!mounted || gen != _rebuildGeneration) return;
 
-      final Uint8List? image = await _decodeMarkerImage(s);
+      final decoded = await _decodeMarkerImage(s);
       if (!mounted || gen != _rebuildGeneration) return;
 
+      final image = decoded.image;
       if (image == null) continue;
 
       final off = s.iconOffset;
       double ax = 0.5 + ((off != null ? off[0] : 0.0) / 200.0);
-      double ay = 0.5 + ((off != null ? off[1] : 0.0) / 200.0);
+      double ay = off != null ? 0.5 + (off[1] / 200.0) : decoded.anchorY;
       // Полароид «стоит» на точке: якорь у нижней кромки, а не в центре bitmap.
       if (off == null && s.photoStyle == MapPhotoMarkerStyle.polaroid && s.iconRotate == null) {
         ax = 0.5;
         ay = 0.88;
       }
 
+      // «Моё положение» только визуально: не участвуй в тапе по иконке (Yandex) + z ниже бэка.
+      final isUser = s.isMapUserLocation;
       final icon = PlacemarkIcon.single(
         PlacemarkIconStyle(
           image: BitmapDescriptor.fromBytes(image),
@@ -384,6 +458,7 @@ class _AppMapWidgetState extends State<AppMapWidget> {
           rotationType: (s.iconRotate != null && s.iconRotate!.abs() > 0.5)
               ? RotationType.rotate
               : RotationType.noRotation,
+          tappableArea: isUser ? MapRect(min: Offset.zero, max: Offset.zero) : null,
         ),
       );
 
@@ -391,15 +466,17 @@ class _AppMapWidgetState extends State<AppMapWidget> {
         PlacemarkMapObject(
           mapId: MapObjectId(s.trackId),
           point: Point(latitude: s.lat, longitude: s.lng),
-          opacity: s.iconOpacity,
+          opacity: 1.0,
           direction: s.iconRotate ?? 0,
           zIndex: s.symbolSortKey,
-          consumeTapEvents: true,
+          consumeTapEvents: !isUser,
           icon: icon,
-          onTap: (PlacemarkMapObject self, Point _) {
-            HapticFeedback.selectionClick();
-            widget.onMarkerTap?.call(s.tapMarker);
-          },
+          onTap: isUser
+              ? null
+              : (PlacemarkMapObject self, Point _) {
+                  HapticFeedback.selectionClick();
+                  widget.onMarkerTap?.call(s.tapMarker);
+                },
         ),
       );
 
@@ -491,44 +568,87 @@ class _AppMapWidgetState extends State<AppMapWidget> {
 
   static const double _mapChromeWidth = 48;
 
+  List<Widget> _buildExtraRightChrome(Iterable<AppMapChromeAction> actions) {
+    return [
+      for (final a in actions) ...[
+        const SizedBox(height: 8),
+        Material(
+          elevation: 4,
+          shadowColor: AppColors.shadowDark.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(14),
+          color: AppColors.surface,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border, width: 0.5),
+            ),
+            child: SizedBox(
+              width: _mapChromeWidth,
+              height: _mapChromeWidth,
+              child: IconButton(
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  a.onPressed();
+                },
+                icon: Icon(a.icon, size: 24),
+                tooltip: a.tooltip,
+                color: a.iconColor ?? AppColors.textColor,
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ];
+  }
+
   Widget _buildZoomControls(double step) {
     final Widget? zoomBlock = widget.showZoomControls
         ? Material(
-            elevation: 6,
-            shadowColor: Colors.black.withValues(alpha: 0.35),
+            elevation: 4,
+            shadowColor: AppColors.shadowDark.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(14),
-            color: Colors.white,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints.tightFor(width: _mapChromeWidth),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      unawaited(_nudgeZoom(step));
-                    },
-                    icon: const Icon(Icons.add_rounded, size: 26),
-                    color: const Color(0xFF1A1D1E),
-                    style: IconButton.styleFrom(
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+            color: AppColors.surface,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints.tightFor(width: _mapChromeWidth),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        unawaited(_nudgeZoom(step));
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 26),
+                      color: AppColors.textColor,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
                     ),
-                  ),
-                  Divider(height: 1, thickness: 1, color: Colors.black.withValues(alpha: 0.08)),
-                  IconButton(
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      unawaited(_nudgeZoom(-step));
-                    },
-                    icon: const Icon(Icons.remove_rounded, size: 26),
-                    color: const Color(0xFF1A1D1E),
-                    style: IconButton.styleFrom(
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    const Divider(height: 1, thickness: 1, color: AppColors.divider),
+                    IconButton(
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        unawaited(_nudgeZoom(-step));
+                      },
+                      icon: const Icon(Icons.remove_rounded, size: 26),
+                      color: AppColors.textColor,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           )
@@ -537,23 +657,29 @@ class _AppMapWidgetState extends State<AppMapWidget> {
     final back = widget.onMapBackPressed == null
         ? null
         : Material(
-            elevation: 6,
-            shadowColor: Colors.black.withValues(alpha: 0.35),
+            elevation: 4,
+            shadowColor: AppColors.shadowDark.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(14),
-            color: Colors.white,
-            child: SizedBox(
-              width: _mapChromeWidth,
-              height: _mapChromeWidth,
-              child: IconButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  widget.onMapBackPressed!();
-                },
-                icon: const Icon(Icons.arrow_back_rounded, size: 22),
-                color: const Color(0xFF1A1D1E),
-                style: IconButton.styleFrom(
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  padding: EdgeInsets.zero,
+            color: AppColors.surface,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border, width: 0.5),
+              ),
+              child: SizedBox(
+                width: _mapChromeWidth,
+                height: _mapChromeWidth,
+                child: IconButton(
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    widget.onMapBackPressed!();
+                  },
+                  icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                  color: AppColors.textColor,
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: EdgeInsets.zero,
+                  ),
                 ),
               ),
             ),
@@ -570,6 +696,7 @@ class _AppMapWidgetState extends State<AppMapWidget> {
             children: [
               if (back != null) ...[back, if (zoomBlock != null) const SizedBox(height: 10)],
               if (zoomBlock != null) zoomBlock,
+              ..._buildExtraRightChrome(widget.rightColumnExtraActions),
             ],
           ),
         ),
@@ -597,7 +724,9 @@ class _AppMapWidgetState extends State<AppMapWidget> {
       ),
     );
 
-    if (!widget.showZoomControls && widget.onMapBackPressed == null) {
+    if (!widget.showZoomControls &&
+        widget.onMapBackPressed == null &&
+        widget.rightColumnExtraActions.isEmpty) {
       return map;
     }
 
@@ -605,7 +734,9 @@ class _AppMapWidgetState extends State<AppMapWidget> {
       fit: StackFit.expand,
       children: [
         map,
-        if (widget.showZoomControls || widget.onMapBackPressed != null)
+        if (widget.showZoomControls ||
+            widget.onMapBackPressed != null ||
+            widget.rightColumnExtraActions.isNotEmpty)
           RepaintBoundary(child: _buildZoomControls(widget.zoomStep)),
       ],
     );

@@ -1,9 +1,9 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
-import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_bio_location.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_actions.dart'
     show ProfileCreateContentKind, ProfileHeaderActionRow;
+import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_bio_location.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_shimmer.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_square_cover.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_stats_row.dart';
@@ -113,8 +113,12 @@ class ProfileHeader extends StatelessWidget {
                             child: ProfileHeaderStatItem(value: statFollowing, label: 'Подписки'),
                           ),
                         ),
-                        Expanded(child: ProfileHeaderStatItem(value: statThird, label: statThirdLabel)),
-                        Expanded(child: ProfileHeaderStatItem(value: statFourth, label: statFourthLabel)),
+                        Expanded(
+                          child: ProfileHeaderStatItem(value: statThird, label: statThirdLabel),
+                        ),
+                        Expanded(
+                          child: ProfileHeaderStatItem(value: statFourth, label: statFourthLabel),
+                        ),
                       ],
                     ),
                   ),
@@ -148,10 +152,6 @@ class ProfileHeader extends StatelessWidget {
   static Widget _tappableStat({required VoidCallback? onTap, required Widget child}) {
     if (onTap == null) return child;
     // Нам нужен tap, но без визуального "splash/highlight" эффекта.
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: child,
-    );
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child);
   }
 }

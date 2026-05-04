@@ -1,19 +1,29 @@
 /// POST /functions/v1/create_post
+///
+/// ⚠️ Тяжёлое base64-тело часто упирается в лимиты Edge (WORKER_RESOURCE_LIMIT).
+/// Продакшен-клиент должен грузить байты напрямую в Storage + `posts`/`post_media` через REST (см. Flutter `PostCreateRepositoryImpl`).
+///
+/// Видео и JPEG-обложка — два файла в bucket `post_media`; в БД только строка про ролик:
+/// - ролик: `posts/{post_id}/{media_uuid}.{ext}`
+/// - постер: `posts/{post_id}/{media_uuid}__poster.jpg` (то же UUID)
+/// Клиент строит URL постера из URL видео (без колонки в post_media).
+///
 /// Body:
 /// {
 ///   title?: string,
-///   subtitle?: string,
 ///   description?: string,
 ///   cluster_id?: string | null,
 ///   aspect?: "9x16"|"1x1"|"3x4"|"16x9",
 ///   media: Array<{ type: "image"|"video", mime: string, ext: string, base64: string, aspect?: "9x16"|"1x1"|"3x4"|"16x9", poster_base64?: string }>
-///   For type "video", optional poster_base64 is a JPEG used as grid/detail preview cover.
 /// }
+/// Для `type: "video"` поле `poster_base64` — JPEG выбранного кадра; без него в БД будет null (старые клиенты).
 ///
 /// Flow:
 /// 1) insert public.posts (user_id = auth.uid())
-/// 2) upload each media to Storage bucket `post_media` at: posts/{post_id}/{media_id}.{ext}
-/// 3) insert public.post_media rows with url (public URL), type, sort_order
+/// 2) upload each media → posts/{post_id}/{media_uuid}.{ext}
+/// 3) для video при наличии poster_base64: upload JPEG → posts/{post_id}/{media_uuid}__poster.jpg
+/// 4) insert public.post_media: url (видео), type, sort_order
+/// Ответ JSON: media[] содержит media_id (UUID файла) — клиент передаёт его в upload_post_media_poster без запросов к post_media.
 /// <reference path="../deno.d.ts" />
 import { corsHeaders, handleCors } from "../_shared/cors.ts";
 import { requireSupabaseUser } from "../_shared/supabase.ts";
@@ -62,9 +72,17 @@ Deno.serve(async (req) => {
     if (!body || typeof body !== "object") return badRequest("Invalid JSON body");
 
     const title = typeof (body as any).title === "string" ? (body as any).title : null;
-    const subtitle = typeof (body as any).subtitle === "string" ? (body as any).subtitle : null;
     const description =
       typeof (body as any).description === "string" ? (body as any).description : null;
+    const event_time =
+      typeof (body as any).event_time === "string" && String((body as any).event_time).trim().length > 0
+        ? String((body as any).event_time).trim()
+        : null;
+    const duration_minutes_raw = (body as any).duration_minutes;
+    const duration_minutes =
+      typeof duration_minutes_raw === "number" && Number.isFinite(duration_minutes_raw)
+        ? Math.trunc(duration_minutes_raw)
+        : null;
     const cluster_id =
       (body as any).cluster_id === null || typeof (body as any).cluster_id === "string"
         ? (body as any).cluster_id
@@ -90,9 +108,10 @@ Deno.serve(async (req) => {
       .insert({
         user_id: user.id,
         title,
-        subtitle,
         description,
         cluster_id: cluster_id === undefined ? null : cluster_id,
+        event_time,
+        duration: duration_minutes === null ? null : `${duration_minutes} minutes`,
       })
       .select("id")
       .single();
@@ -108,7 +127,6 @@ Deno.serve(async (req) => {
       url: string;
       type: string;
       sort_order: number;
-      poster_url: string | null;
     }> = [];
 
     // 2) upload media
@@ -120,7 +138,6 @@ Deno.serve(async (req) => {
       const ext = extRaw.replace(/[^a-z0-9]/g, "");
       const base64 = String(m.base64 ?? "");
       const itemAspect = typeof m.aspect === "string" ? String(m.aspect).trim() : null;
-      const effectiveAspect = itemAspect || aspect;
 
       if (
         itemAspect !== null &&
@@ -139,8 +156,7 @@ Deno.serve(async (req) => {
       if (!base64) return badRequest(`media[${i}].base64 required`);
 
       const mediaId = crypto.randomUUID();
-      const suffix = effectiveAspect ? `__ar-${effectiveAspect}` : "";
-      const path = `posts/${postId}/${mediaId}${suffix}.${ext}`;
+      const path = `posts/${postId}/${mediaId}.${ext}`;
       const bytes = toBytes(base64);
 
       const { error: upErr } = await supabase.storage
@@ -153,7 +169,6 @@ Deno.serve(async (req) => {
 
       const { data: pub } = supabase.storage.from("post_media").getPublicUrl(path);
 
-      let posterUrl: string | null = null;
       if (type === "video") {
         const posterRaw = (m as { poster_base64?: unknown }).poster_base64;
         const posterBase64 =
@@ -167,12 +182,10 @@ Deno.serve(async (req) => {
           if (pErr) {
             return badRequest(`poster upload failed: ${pErr.message}`);
           }
-          const { data: pPub } = supabase.storage.from("post_media").getPublicUrl(posterPath);
-          posterUrl = pPub.publicUrl;
         }
       }
 
-      uploaded.push({ id: mediaId, path, url: pub.publicUrl, type, sort_order: i, poster_url: posterUrl });
+      uploaded.push({ id: mediaId, path, url: pub.publicUrl, type, sort_order: i });
     }
 
     // 3) insert post_media rows
@@ -182,7 +195,6 @@ Deno.serve(async (req) => {
         url: u.url,
         type: u.type,
         sort_order: u.sort_order,
-        poster_url: u.poster_url,
       })),
     );
     if (pmErr) {
@@ -192,7 +204,12 @@ Deno.serve(async (req) => {
     return jsonOk({
       ok: true,
       post_id: postId,
-      media: uploaded.map((u) => ({ url: u.url, type: u.type, sort_order: u.sort_order })),
+      media: uploaded.map((u) => ({
+        url: u.url,
+        type: u.type,
+        sort_order: u.sort_order,
+        media_id: u.id,
+      })),
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {

@@ -7,7 +7,7 @@ import 'package:side_project/core/shared/app_list_item.dart';
 import 'package:side_project/core/shared/app_outlined_button.dart';
 
 /// Что пользователь выбрал создать из шторки «+» в шапке профиля.
-enum ProfileCreateContentKind { cluster, post }
+enum ProfileCreateContentKind { cluster, post, marker }
 
 /// Кнопки действий в шапке профиля.
 class ProfileHeaderActionRow extends StatelessWidget {
@@ -42,6 +42,12 @@ class ProfileHeaderActionRow extends StatelessWidget {
                 leading: Icon(AppIcons.photo.icon, color: AppColors.primary, size: 22),
                 title: const Text('Создать пост'),
                 onTap: () => Navigator.of(sheetContext).pop(ProfileCreateContentKind.post),
+              ),
+              const SizedBox(height: 4),
+              AppListTile(
+                leading: const Icon(Icons.place_outlined, color: AppColors.primary, size: 22),
+                title: const Text('Создать маркер'),
+                onTap: () => Navigator.of(sheetContext).pop(ProfileCreateContentKind.marker),
               ),
             ],
           );

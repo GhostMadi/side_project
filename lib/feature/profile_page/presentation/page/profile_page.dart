@@ -7,6 +7,8 @@ import 'package:side_project/feature/cluster/presentation/cubit/clusters_list_cu
 import 'package:side_project/feature/cluster/presentation/widget/clusters_strip_shimmer.dart';
 import 'package:side_project/feature/posts/presentation/cubit/posts_list_cubit.dart';
 import 'package:side_project/feature/profile/presentation/cubit/profile_cubit.dart';
+import 'package:side_project/feature/profile_page/presentation/cubit/profile_marker_linked_posts_cubit.dart';
+import 'package:side_project/feature/profile_page/presentation/cubit/profile_markers_cubit.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_loaded_body.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_error_top.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_scroll_shell.dart';
@@ -25,6 +27,8 @@ class _ProfilePageState extends State<ProfilePage> {
   final ValueNotifier<bool> _refreshingVisual = ValueNotifier(false);
   late final ClustersListCubit _clustersCubit;
   late final PostsListCubit _postsCubit;
+  late final ProfileMarkersCubit _markersCubit;
+  late final ProfileMarkerLinkedPostsCubit _markerLinkedCubit;
   String? _uid;
 
   @override
@@ -32,10 +36,14 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _clustersCubit = sl<ClustersListCubit>();
     _postsCubit = sl<PostsListCubit>();
+    _markersCubit = sl<ProfileMarkersCubit>();
+    _markerLinkedCubit = sl<ProfileMarkerLinkedPostsCubit>();
     _uid = Supabase.instance.client.auth.currentUser?.id;
     if (_uid != null) {
       _clustersCubit.load(_uid!);
       _postsCubit.loadUserFeed(_uid!);
+      _markersCubit.load(_uid!);
+      _markerLinkedCubit.load(_uid!);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -48,6 +56,8 @@ class _ProfilePageState extends State<ProfilePage> {
     _refreshingVisual.dispose();
     _clustersCubit.close();
     _postsCubit.close();
+    _markersCubit.close();
+    _markerLinkedCubit.close();
     super.dispose();
   }
 
@@ -59,6 +69,8 @@ class _ProfilePageState extends State<ProfilePage> {
       if (_uid != null) {
         _clustersCubit.load(_uid!);
         _postsCubit.loadUserFeed(_uid!);
+        _markersCubit.load(_uid!);
+        _markerLinkedCubit.reload();
       }
       if (isError) {
         await cubit.loadMyProfile();
@@ -81,6 +93,8 @@ class _ProfilePageState extends State<ProfilePage> {
         providers: [
           BlocProvider.value(value: _clustersCubit),
           BlocProvider.value(value: _postsCubit),
+          BlocProvider.value(value: _markersCubit),
+          BlocProvider.value(value: _markerLinkedCubit),
         ],
         child: BlocBuilder<ProfileCubit, ProfileState>(
           builder: (context, state) {

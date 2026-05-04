@@ -46,8 +46,8 @@ List<MapMarker> almatyDemoMarkers() {
         'organizerCity': 'Алматы · Бостандык',
         'organizerAvatarUrl': 'https://picsum.photos/seed/lumos/200/200',
         'title': 'Джаз на террасе',
-        'subtitle': 'Живая музыка · вход свободный при заказе напитка',
         'description':
+            'Живая музыка · вход свободный при заказе напитка.\n\n'
             'Сегодня играем акустический сет. Успейте занять место у окна — вид на горы. '
             'Бронь не нужна, но в чате можем держать столик.',
         'startsAt': _isoTonight(19, 0),
@@ -64,8 +64,8 @@ List<MapMarker> almatyDemoMarkers() {
         'organizerName': 'Urban Yard',
         'organizerCity': 'Алматы · Медеу',
         'title': 'Трансляция матча на большом экране',
-        'subtitle': 'Компания · угощаем снеками первые столы',
         'description':
+            'Компания · угощаем снеками первые столы.\n\n'
             'Собираемся посмотреть игру вместе. Закажите напитки у бармена — расскажут акцию дня.',
         'startsAt': _isoTonight(21, 30),
         'venueLabel': 'ул. Кабанбай батыра, 85',
@@ -83,8 +83,8 @@ List<MapMarker> almatyDemoMarkers() {
         'organizerCity': 'Алматы · Самал',
         'organizerAvatarUrl': 'https://picsum.photos/seed/wave/200/200',
         'title': 'Открытая встреча с бариста',
-        'subtitle': 'Дегустация новых зёрен · 45 минут',
         'description':
+            'Дегустация новых зёрен · 45 минут.\n\n'
             'Расскажем, откуда зерно и как готовим ваш любимый эспрессо. Для гостей — мини-сет напитков.',
         'startsAt': _isoTomorrow(17, 0),
         'venueLabel': 'мкр. Самал-2, 58а, 1 этаж',

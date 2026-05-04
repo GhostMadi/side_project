@@ -14,7 +14,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PostCreateDraft {
 
- String? get title; String? get subtitle; String? get description; String? get clusterId; List<PostCreateMediaItem> get media;
+/// Optional marker to attach this post to (`markers.post_id`).
+ String? get markerId;/// Optional per-post session time (within marker lifetime).
+ DateTime? get eventTime;/// Optional per-post session duration in minutes (<= 24h).
+ int? get durationMinutes; String? get title; String? get description; String? get clusterId; List<PostCreateMediaItem> get media;
 /// Create a copy of PostCreateDraft
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +28,16 @@ $PostCreateDraftCopyWith<PostCreateDraft> get copyWith => _$PostCreateDraftCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PostCreateDraft&&(identical(other.title, title) || other.title == title)&&(identical(other.subtitle, subtitle) || other.subtitle == subtitle)&&(identical(other.description, description) || other.description == description)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&const DeepCollectionEquality().equals(other.media, media));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PostCreateDraft&&(identical(other.markerId, markerId) || other.markerId == markerId)&&(identical(other.eventTime, eventTime) || other.eventTime == eventTime)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes)&&(identical(other.title, title) || other.title == title)&&(identical(other.description, description) || other.description == description)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&const DeepCollectionEquality().equals(other.media, media));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,title,subtitle,description,clusterId,const DeepCollectionEquality().hash(media));
+int get hashCode => Object.hash(runtimeType,markerId,eventTime,durationMinutes,title,description,clusterId,const DeepCollectionEquality().hash(media));
 
 @override
 String toString() {
-  return 'PostCreateDraft(title: $title, subtitle: $subtitle, description: $description, clusterId: $clusterId, media: $media)';
+  return 'PostCreateDraft(markerId: $markerId, eventTime: $eventTime, durationMinutes: $durationMinutes, title: $title, description: $description, clusterId: $clusterId, media: $media)';
 }
 
 
@@ -45,7 +48,7 @@ abstract mixin class $PostCreateDraftCopyWith<$Res>  {
   factory $PostCreateDraftCopyWith(PostCreateDraft value, $Res Function(PostCreateDraft) _then) = _$PostCreateDraftCopyWithImpl;
 @useResult
 $Res call({
- String? title, String? subtitle, String? description, String? clusterId, List<PostCreateMediaItem> media
+ String? markerId, DateTime? eventTime, int? durationMinutes, String? title, String? description, String? clusterId, List<PostCreateMediaItem> media
 });
 
 
@@ -62,10 +65,12 @@ class _$PostCreateDraftCopyWithImpl<$Res>
 
 /// Create a copy of PostCreateDraft
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? title = freezed,Object? subtitle = freezed,Object? description = freezed,Object? clusterId = freezed,Object? media = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? markerId = freezed,Object? eventTime = freezed,Object? durationMinutes = freezed,Object? title = freezed,Object? description = freezed,Object? clusterId = freezed,Object? media = null,}) {
   return _then(_self.copyWith(
-title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String?,subtitle: freezed == subtitle ? _self.subtitle : subtitle // ignore: cast_nullable_to_non_nullable
+markerId: freezed == markerId ? _self.markerId : markerId // ignore: cast_nullable_to_non_nullable
+as String?,eventTime: freezed == eventTime ? _self.eventTime : eventTime // ignore: cast_nullable_to_non_nullable
+as DateTime?,durationMinutes: freezed == durationMinutes ? _self.durationMinutes : durationMinutes // ignore: cast_nullable_to_non_nullable
+as int?,title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,clusterId: freezed == clusterId ? _self.clusterId : clusterId // ignore: cast_nullable_to_non_nullable
 as String?,media: null == media ? _self.media : media // ignore: cast_nullable_to_non_nullable
@@ -154,10 +159,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? title,  String? subtitle,  String? description,  String? clusterId,  List<PostCreateMediaItem> media)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? markerId,  DateTime? eventTime,  int? durationMinutes,  String? title,  String? description,  String? clusterId,  List<PostCreateMediaItem> media)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PostCreateDraft() when $default != null:
-return $default(_that.title,_that.subtitle,_that.description,_that.clusterId,_that.media);case _:
+return $default(_that.markerId,_that.eventTime,_that.durationMinutes,_that.title,_that.description,_that.clusterId,_that.media);case _:
   return orElse();
 
 }
@@ -175,10 +180,10 @@ return $default(_that.title,_that.subtitle,_that.description,_that.clusterId,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? title,  String? subtitle,  String? description,  String? clusterId,  List<PostCreateMediaItem> media)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? markerId,  DateTime? eventTime,  int? durationMinutes,  String? title,  String? description,  String? clusterId,  List<PostCreateMediaItem> media)  $default,) {final _that = this;
 switch (_that) {
 case _PostCreateDraft():
-return $default(_that.title,_that.subtitle,_that.description,_that.clusterId,_that.media);case _:
+return $default(_that.markerId,_that.eventTime,_that.durationMinutes,_that.title,_that.description,_that.clusterId,_that.media);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -195,10 +200,10 @@ return $default(_that.title,_that.subtitle,_that.description,_that.clusterId,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? title,  String? subtitle,  String? description,  String? clusterId,  List<PostCreateMediaItem> media)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? markerId,  DateTime? eventTime,  int? durationMinutes,  String? title,  String? description,  String? clusterId,  List<PostCreateMediaItem> media)?  $default,) {final _that = this;
 switch (_that) {
 case _PostCreateDraft() when $default != null:
-return $default(_that.title,_that.subtitle,_that.description,_that.clusterId,_that.media);case _:
+return $default(_that.markerId,_that.eventTime,_that.durationMinutes,_that.title,_that.description,_that.clusterId,_that.media);case _:
   return null;
 
 }
@@ -210,11 +215,16 @@ return $default(_that.title,_that.subtitle,_that.description,_that.clusterId,_th
 
 
 class _PostCreateDraft implements PostCreateDraft {
-  const _PostCreateDraft({this.title, this.subtitle, this.description, this.clusterId, final  List<PostCreateMediaItem> media = const []}): _media = media;
+  const _PostCreateDraft({this.markerId, this.eventTime, this.durationMinutes, this.title, this.description, this.clusterId, final  List<PostCreateMediaItem> media = const []}): _media = media;
   
 
+/// Optional marker to attach this post to (`markers.post_id`).
+@override final  String? markerId;
+/// Optional per-post session time (within marker lifetime).
+@override final  DateTime? eventTime;
+/// Optional per-post session duration in minutes (<= 24h).
+@override final  int? durationMinutes;
 @override final  String? title;
-@override final  String? subtitle;
 @override final  String? description;
 @override final  String? clusterId;
  final  List<PostCreateMediaItem> _media;
@@ -235,16 +245,16 @@ _$PostCreateDraftCopyWith<_PostCreateDraft> get copyWith => __$PostCreateDraftCo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PostCreateDraft&&(identical(other.title, title) || other.title == title)&&(identical(other.subtitle, subtitle) || other.subtitle == subtitle)&&(identical(other.description, description) || other.description == description)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&const DeepCollectionEquality().equals(other._media, _media));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PostCreateDraft&&(identical(other.markerId, markerId) || other.markerId == markerId)&&(identical(other.eventTime, eventTime) || other.eventTime == eventTime)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes)&&(identical(other.title, title) || other.title == title)&&(identical(other.description, description) || other.description == description)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&const DeepCollectionEquality().equals(other._media, _media));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,title,subtitle,description,clusterId,const DeepCollectionEquality().hash(_media));
+int get hashCode => Object.hash(runtimeType,markerId,eventTime,durationMinutes,title,description,clusterId,const DeepCollectionEquality().hash(_media));
 
 @override
 String toString() {
-  return 'PostCreateDraft(title: $title, subtitle: $subtitle, description: $description, clusterId: $clusterId, media: $media)';
+  return 'PostCreateDraft(markerId: $markerId, eventTime: $eventTime, durationMinutes: $durationMinutes, title: $title, description: $description, clusterId: $clusterId, media: $media)';
 }
 
 
@@ -255,7 +265,7 @@ abstract mixin class _$PostCreateDraftCopyWith<$Res> implements $PostCreateDraft
   factory _$PostCreateDraftCopyWith(_PostCreateDraft value, $Res Function(_PostCreateDraft) _then) = __$PostCreateDraftCopyWithImpl;
 @override @useResult
 $Res call({
- String? title, String? subtitle, String? description, String? clusterId, List<PostCreateMediaItem> media
+ String? markerId, DateTime? eventTime, int? durationMinutes, String? title, String? description, String? clusterId, List<PostCreateMediaItem> media
 });
 
 
@@ -272,10 +282,12 @@ class __$PostCreateDraftCopyWithImpl<$Res>
 
 /// Create a copy of PostCreateDraft
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? title = freezed,Object? subtitle = freezed,Object? description = freezed,Object? clusterId = freezed,Object? media = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? markerId = freezed,Object? eventTime = freezed,Object? durationMinutes = freezed,Object? title = freezed,Object? description = freezed,Object? clusterId = freezed,Object? media = null,}) {
   return _then(_PostCreateDraft(
-title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String?,subtitle: freezed == subtitle ? _self.subtitle : subtitle // ignore: cast_nullable_to_non_nullable
+markerId: freezed == markerId ? _self.markerId : markerId // ignore: cast_nullable_to_non_nullable
+as String?,eventTime: freezed == eventTime ? _self.eventTime : eventTime // ignore: cast_nullable_to_non_nullable
+as DateTime?,durationMinutes: freezed == durationMinutes ? _self.durationMinutes : durationMinutes // ignore: cast_nullable_to_non_nullable
+as int?,title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,clusterId: freezed == clusterId ? _self.clusterId : clusterId // ignore: cast_nullable_to_non_nullable
 as String?,media: null == media ? _self._media : media // ignore: cast_nullable_to_non_nullable

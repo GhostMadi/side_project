@@ -20,8 +20,8 @@ class MediaPickEditConfig {
   /// Доступные пресеты кадра на шаге редактирования.
   final List<MediaAspectPreset> cropPresets;
 
-  /// Конфиг по умолчанию для создания поста.
-  static const MediaPickEditConfig postDefault = MediaPickEditConfig();
+  /// Конфиг по умолчанию для создания поста (пока только фото — без видео).
+  static const MediaPickEditConfig postDefault = MediaPickEditConfig(allowVideo: false);
 
   /// Нормализованный список пресетов (не пустой).
   List<MediaAspectPreset> get resolvedCropPresets =>

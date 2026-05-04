@@ -5,24 +5,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:side_project/core/dependencies/get_it.dart' show sl;
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
+import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/storage/prefs/profile_follow_status_prefs_storage.dart';
+import 'package:side_project/feature/chat/data/repository/chat_repository.dart';
 import 'package:side_project/feature/cluster/presentation/cubit/clusters_list_cubit.dart';
-import 'package:side_project/feature/cluster/presentation/widget/owner_clusters_strip.dart';
 import 'package:side_project/feature/cluster/presentation/widget/clusters_strip_shimmer.dart';
+import 'package:side_project/feature/cluster/presentation/widget/owner_clusters_strip.dart';
 import 'package:side_project/feature/followers_page/data/repository/follow_list_repository.dart';
 import 'package:side_project/feature/followers_page/presentation/cubit/follow_mutation_cubit.dart';
 import 'package:side_project/feature/posts/presentation/cubit/posts_list_cubit.dart';
 import 'package:side_project/feature/posts/presentation/widget/posts_list_view.dart';
-import 'package:side_project/feature/chat/data/repository/chat_repository.dart';
+import 'package:side_project/feature/profile/data/models/profile_model.dart';
 import 'package:side_project/feature/profile/presentation/cubit/profile_cubit.dart';
+import 'package:side_project/feature/profile_page/presentation/cubit/profile_marker_linked_posts_cubit.dart';
+import 'package:side_project/feature/profile_page/presentation/cubit/profile_markers_cubit.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_error_top.dart';
+import 'package:side_project/feature/profile_page/presentation/page/profile_page_formatting.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_scroll_shell.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header.dart';
-import 'package:side_project/feature/profile/data/models/profile_model.dart';
-import 'package:side_project/feature/profile_page/presentation/page/profile_page_formatting.dart';
-import 'package:side_project/core/router/app_router.gr.dart';
+import 'package:side_project/feature/profile_page/presentation/widget/profile_marked_posts_grid.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_posts_tab_bar.dart';
+import 'package:side_project/feature/profile_page/presentation/widget/profile_posts_tab_content.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Профиль гостя (чужой профиль): без настроек/создания/редактирования, только подписка.
@@ -40,7 +44,10 @@ class _GuestProfilePageState extends State<GuestProfilePage> {
   final ValueNotifier<bool> _refreshingVisual = ValueNotifier(false);
   late final ClustersListCubit _clustersCubit;
   late final PostsListCubit _postsCubit;
+  late final ProfileMarkersCubit _markersCubit;
+  late final ProfileMarkerLinkedPostsCubit _markerLinkedCubit;
   bool? _isFollowing;
+  int _tabIndex = 0;
 
   String get _profileId => widget.profileId.trim();
 
@@ -49,11 +56,15 @@ class _GuestProfilePageState extends State<GuestProfilePage> {
     super.initState();
     _clustersCubit = sl<ClustersListCubit>();
     _postsCubit = sl<PostsListCubit>();
+    _markersCubit = sl<ProfileMarkersCubit>();
+    _markerLinkedCubit = sl<ProfileMarkerLinkedPostsCubit>();
 
     final id = _profileId;
     if (id.isNotEmpty) {
       _clustersCubit.load(id);
       _postsCubit.loadUserFeed(id);
+      _markersCubit.load(id);
+      _markerLinkedCubit.load(id);
     }
 
     // Сразу: статус из локального кэша.
@@ -88,6 +99,8 @@ class _GuestProfilePageState extends State<GuestProfilePage> {
     _refreshingVisual.dispose();
     _clustersCubit.close();
     _postsCubit.close();
+    _markersCubit.close();
+    _markerLinkedCubit.close();
     super.dispose();
   }
 
@@ -100,6 +113,8 @@ class _GuestProfilePageState extends State<GuestProfilePage> {
     try {
       _clustersCubit.load(id);
       _postsCubit.loadUserFeed(id);
+      _markersCubit.load(id);
+      _markerLinkedCubit.reload();
       await cubit.loadProfile(id);
     } finally {
       if (mounted) _refreshingVisual.value = false;
@@ -118,6 +133,8 @@ class _GuestProfilePageState extends State<GuestProfilePage> {
         providers: [
           BlocProvider.value(value: _clustersCubit),
           BlocProvider.value(value: _postsCubit),
+          BlocProvider.value(value: _markersCubit),
+          BlocProvider.value(value: _markerLinkedCubit),
         ],
         child: BlocBuilder<ProfileCubit, ProfileState>(
           builder: (context, state) {
@@ -156,20 +173,26 @@ class _GuestProfilePageState extends State<GuestProfilePage> {
                                 targetProfileId: id,
                               ),
                               OwnerClustersStrip(ownerId: id),
-                              const ProfilePostsTabBar(),
-                              PostsListView(
-                                onPostTap: (post) async {
-                                  final initialSaved = context.read<PostsListCubit>().state.maybeWhen(
-                                        loaded: (_, __, savedByPostId, _, _, _, _) => savedByPostId[post.id],
-                                        orElse: () => null,
-                                      );
-                                  final deleted = await context.router.push<bool>(
-                                    PostDetailRoute(post: post, initialIsSaved: initialSaved),
-                                  );
-                                  if (deleted == true && context.mounted) {
-                                    context.read<PostsListCubit>().reloadKeepingFilter();
-                                  }
-                                },
+                              ProfilePostsTabBar(index: _tabIndex, onChanged: (i) => setState(() => _tabIndex = i)),
+                              ProfilePostsTabContent(
+                                index: _tabIndex,
+                                onIndexChanged: (i) => setState(() => _tabIndex = i),
+                                posts: PostsListView(
+                                  onPostTap: (post) async {
+                                    final initialSaved = context.read<PostsListCubit>().state.maybeWhen(
+                                      loaded: (_, __, savedByPostId, _, _, _, _) =>
+                                          savedByPostId[post.id],
+                                      orElse: () => null,
+                                    );
+                                    final deleted = await context.router.push<bool>(
+                                      PostDetailRoute(post: post, initialIsSaved: initialSaved),
+                                    );
+                                    if (deleted == true && context.mounted) {
+                                      context.read<PostsListCubit>().reloadKeepingFilter();
+                                    }
+                                  },
+                                ),
+                                markers: const ProfileMarkedPostsGrid(key: ValueKey('marked_posts')),
                               ),
                             ],
                           ),
@@ -366,4 +389,3 @@ class _GuestFollowActionsRow extends StatelessWidget {
     );
   }
 }
-

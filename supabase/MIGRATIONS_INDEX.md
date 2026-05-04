@@ -28,6 +28,28 @@
   - **tables**: `public.post_send_events`
   - **triggers**: `posts.sends_count`
 
+### Post media (video posters)
+- `20260418120001_post_media_poster_url.sql`
+  - **post_media**: `poster_url` (JPEG poster для видео плиток/превью)
+
+### Markers (events on map)
+- `20260425160000_markers_core.sql`
+  - **types**: `public.marker_status`
+  - **tables**: `public.markers`, `public.marker_tags`, `public.marker_tag_links`
+  - **posts**: ранняя версия связывала через `public.posts.marker_id` (см. следующую миграцию)
+  - **time**: `duration <= 24h`, `end_time = event_time + duration` (trigger)
+  - **geo**: PostGIS (`location geography(Point,4326)`, `ST_DWithin`, distance sort)
+  - **RPC**: `public.list_markers_map(...)` (фильтры emoji/tags + сортировка distance→event_time)
+
+- `20260425171000_markers_bind_post_id.sql`
+  - **markers**: `public.markers.post_id` (опциональная связь маркера с постом)
+  - **posts**: удаляет `public.posts.marker_id` (переворот связи)
+  - **map visibility**: маркер показываем только если `post_id is not null`
+  - **RPC**: обновляет `public.list_markers_map(...)` под новый контракт
+
+- `20260425172000_markers_fix_insert_rls.sql`
+  - **RLS/grants**: идемпотентно восстанавливает `markers_insert_own/update_own/delete_own` + `GRANT` для `authenticated` (фикс 403 на insert)
+
 - `20260407201000_hot_feed_materialized_view.sql`
   - **materialized view**: `public.hot_posts_24h` (hot feed last 24h)
   - **refresh**: `public.refresh_hot_posts_24h()` + best-effort `pg_cron` schedule (every 5 min)
@@ -87,7 +109,7 @@
 | `20260426100000_chat_read_by_peer.sql` (+ `…26110000…`) | Поле `read_by_peer` в enriched-сообщениях. |
 | `20260426120000_chat_child_tables_conversation_id.sql` | `conversation_id` на дочерних таблицах сообщений. |
 | `20260426130000_chat_participants_replica_identity_full.sql` (+ `20260429120000_ensure_chat_participants_replica_identity_full.sql`) | `REPLICA IDENTITY FULL` на `chat_participants` для полноты WAL/Realtime UPDATE. |
-| `20260427120000_chat_participants_select_no_rls_recursion.sql` | Политика SELECT без рекурсии RLS. |
+| `20260427120100_chat_participants_select_no_rls_recursion.sql` | Политика SELECT без рекурсии RLS. |
 | `20260427130000_chat_participants_grant_select_authenticated.sql` | `GRANT SELECT` для REST peer-курсоров. |
 | `20260428120000_mark_conversation_read_monotonic_cursor.sql` | Монотонный курсор в `mark_conversation_read`. |
 | `20260429140000_chat_broadcast_peer_read.sql` | Broadcast `peer_read` при сдвиге read-курсора (мгновенные галочки у отправителя). |

@@ -11,10 +11,11 @@ import 'package:side_project/feature/posts/presentation/widget/posts_section.dar
 ///
 /// Важно: **кубит создаётся и вызывается родителем** (как в кластерах) через `BlocProvider.value`.
 class PostsListView extends StatelessWidget {
-  const PostsListView({super.key, this.onPostTap, this.crossAxisCount = 3});
+  const PostsListView({super.key, this.onPostTap, this.crossAxisCount = 2});
 
   final void Function(PostModel post)? onPostTap;
-  /// Число колонок сетки (профиль: 3).
+
+  /// Число колонок сетки (профиль: 2).
   final int crossAxisCount;
 
   @override
@@ -42,7 +43,11 @@ class PostsListView extends StatelessWidget {
                   onPostTap: onPostTap,
                   crossAxisCount: crossAxisCount,
                 ),
-                if (isLoadingMore) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
+                if (isLoadingMore)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
               ],
             ),
             error: (_) => PostsSection(posts: const [], crossAxisCount: crossAxisCount),

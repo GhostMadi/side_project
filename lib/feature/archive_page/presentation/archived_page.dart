@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:side_project/core/dependencies/get_it.dart' show sl;
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/icons/app_icons.dart';
@@ -16,17 +17,24 @@ import 'package:side_project/core/shared/app_dialog.dart';
 import 'package:side_project/core/shared/app_pill_navigation_bar.dart';
 import 'package:side_project/core/shared/app_shimmer.dart';
 import 'package:side_project/core/shared/app_snack_bar.dart';
+import 'package:side_project/core/shared/app_overflow_menu.dart';
 import 'package:side_project/feature/archive_page/presentation/cubit/archived_posts_cubit.dart';
+import 'package:side_project/feature/archive_page/presentation/cubit/archived_markers_cubit.dart';
 import 'package:side_project/feature/cluster/data/models/cluster_model.dart';
 import 'package:side_project/feature/cluster/data/repository/cluster_repository.dart';
 import 'package:side_project/feature/cluster/presentation/cluster_list_refresh.dart';
 import 'package:side_project/feature/cluster/presentation/cubit/archived_clusters_cubit.dart';
+import 'package:side_project/feature/posts/data/models/post_media_model.dart';
 import 'package:side_project/feature/posts/data/models/post_model.dart';
+import 'package:side_project/feature/posts/data/models/post_linked_marker_model.dart';
+import 'package:side_project/feature/posts/data/repository/posts_repository.dart';
 import 'package:side_project/feature/posts/presentation/widget/posts_section.dart';
+import 'package:side_project/core/shared/media_widget.dart';
 import 'package:side_project/feature/profile/presentation/cubit/profile_cubit.dart';
+import 'package:side_project/feature/profile_page/data/models/profile_marker_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-enum ArchivedSection { clusters, posts }
+enum ArchivedSection { clusters, posts, markers }
 
 @RoutePage()
 class ArchivedPage extends StatefulWidget {
@@ -84,6 +92,20 @@ class _ArchivedPageState extends State<ArchivedPage> {
                         : null,
                     onTap: () {
                       _section.value = ArchivedSection.posts;
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(Icons.location_on_outlined, color: AppColors.primary, size: 22),
+                    title: Text(
+                      'Маркеры',
+                      style: AppTextStyle.base(16, fontWeight: FontWeight.w600, color: AppColors.textColor),
+                    ),
+                    trailing: current == ArchivedSection.markers
+                        ? Icon(Icons.check_rounded, color: AppColors.primary, size: 22)
+                        : null,
+                    onTap: () {
+                      _section.value = ArchivedSection.markers;
                       Navigator.of(sheetContext).pop();
                     },
                   ),
@@ -161,9 +183,382 @@ class _ArchivedPageState extends State<ArchivedPage> {
                   if (s == ArchivedSection.posts) {
                     return const _ArchivedPostsList();
                   }
+                  if (s == ArchivedSection.markers) {
+                    return const _ArchivedMarkersList();
+                  }
                   return _ArchivedClustersList(ownerId: uid);
                 },
               ),
+      ),
+    );
+  }
+}
+
+class _ArchivedMarkersList extends StatefulWidget {
+  const _ArchivedMarkersList();
+
+  @override
+  State<_ArchivedMarkersList> createState() => _ArchivedMarkersListState();
+}
+
+class _ArchivedMarkersListState extends State<_ArchivedMarkersList> {
+  late final ArchivedMarkersCubit _cubit;
+  late final _posts = sl<PostsRepository>();
+  String _prefetchSig = '';
+  Map<String, PostModel> _postById = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _cubit = sl<ArchivedMarkersCubit>()..load();
+  }
+
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
+  }
+
+  Future<void> _prefetchFor(List<ProfileMarkerModel> markers) async {
+    final ids = <String>[
+      for (final m in markers)
+        if (m.postId != null && m.postId!.trim().isNotEmpty) m.postId!.trim(),
+    ];
+    ids.sort();
+    final sig = ids.join('|');
+    if (sig.isEmpty || sig == _prefetchSig) return;
+    _prefetchSig = sig;
+
+    await _posts.prefetchPostsByIds(ids);
+    if (!mounted) return;
+    final map = <String, PostModel>{};
+    for (final id in ids) {
+      final p = _posts.getCachedPostById(id);
+      if (p != null) map[id] = p;
+    }
+    setState(() => _postById = map);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<ArchivedMarkersCubit, ArchivedMarkersState>(
+        builder: (context, state) {
+          return NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              if (n.metrics.maxScrollExtent <= 0) return false;
+              final remaining = n.metrics.maxScrollExtent - n.metrics.pixels;
+              if (remaining < 600) {
+                context.read<ArchivedMarkersCubit>().loadMore();
+              }
+              return false;
+            },
+            child: RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: () => context.read<ArchivedMarkersCubit>().refresh(),
+              child: state.map(
+                initial: (_) => const Center(child: AppCircularProgressIndicator(dimension: 36)),
+                loading: (_) => const Center(child: AppCircularProgressIndicator(dimension: 36)),
+                error: (e) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      e.message,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyle.base(14, color: AppColors.subTextColor),
+                    ),
+                  ),
+                ),
+                loaded: (s) {
+                  unawaited(_prefetchFor(s.items));
+                  if (s.items.isEmpty) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
+                        const SizedBox(height: 64),
+                        Icon(Icons.archive_outlined, size: 56, color: AppColors.subTextColor.withValues(alpha: 0.65)),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Нет архивных маркеров',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyle.base(17, fontWeight: FontWeight.w600, color: AppColors.textColor),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Архивированные события будут появляться здесь.',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyle.base(14, color: AppColors.subTextColor, height: 1.45),
+                        ),
+                      ],
+                    );
+                  }
+                  return CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.only(top: 8),
+                        sliver: SliverToBoxAdapter(
+                          child: _MarkerGrid(
+                            markers: s.items,
+                            childForMarker: (m) {
+                              final pid = m.postId?.trim();
+                              final Widget child;
+                              if (pid == null || pid.isEmpty) {
+                                child = _MarkerNullPostTile(marker: m);
+                              } else {
+                                final post = _postById[pid];
+                                child = post != null ? _ArchivedMarkerPostTile(marker: m, post: post) : const _MarkerCellShimmer();
+                              }
+                              return _ArchivedMarkerTileShell(marker: m, child: child);
+                            },
+                            bottomExtra: s.isLoadingMore && s.hasMore
+                                ? const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 12),
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ArchivedMarkerTileShell extends StatelessWidget {
+  const _ArchivedMarkerTileShell({required this.marker, required this.child});
+
+  final ProfileMarkerModel marker;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        child,
+        Positioned(
+          top: 6,
+          right: 6,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.30),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: AppOverflowMenu<String>(
+              iconColor: AppColors.textInverse,
+              items: const [
+                AppOverflowMenuItem(
+                  value: 'unarchive',
+                  title: 'Разархивировать',
+                  icon: Icons.unarchive_outlined,
+                ),
+                AppOverflowMenuItem(
+                  value: 'delete',
+                  title: 'Удалить',
+                  icon: Icons.delete_outline_rounded,
+                  titleColor: AppColors.destructive,
+                  iconColor: AppColors.destructive,
+                ),
+              ],
+              onSelected: (v) async {
+                if (v == 'unarchive') {
+                  await context.read<ArchivedMarkersCubit>().unarchiveMarker(marker.id);
+                  if (!context.mounted) return;
+                  AppSnackBar.show(context, message: 'Маркер разархивирован', kind: AppSnackBarKind.success);
+                  return;
+                }
+                if (v == 'delete') {
+                  final ok = await AppDialog.showConfirm(
+                    context: context,
+                    title: 'Удалить маркер?',
+                    message: 'Маркер будет удалён навсегда. Это действие нельзя отменить.',
+                    confirmLabel: 'Удалить',
+                    confirmIsDestructive: true,
+                  );
+                  if (ok != true || !context.mounted) return;
+                  await context.read<ArchivedMarkersCubit>().deleteMarker(marker.id);
+                  if (!context.mounted) return;
+                  AppSnackBar.show(context, message: 'Маркер удалён', kind: AppSnackBarKind.success);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MarkerGrid extends StatelessWidget {
+  const _MarkerGrid({required this.markers, required this.childForMarker, this.bottomExtra});
+
+  final List<ProfileMarkerModel> markers;
+  final Widget Function(ProfileMarkerModel m) childForMarker;
+  final Widget? bottomExtra;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: StaggeredGrid.count(
+        crossAxisCount: 2,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+        children: [
+          for (final m in markers)
+            StaggeredGridTile.count(crossAxisCellCount: 1, mainAxisCellCount: 1, child: childForMarker(m)),
+          if (bottomExtra != null)
+            StaggeredGridTile.count(crossAxisCellCount: 2, mainAxisCellCount: 1, child: bottomExtra!),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarkerCellShimmer extends StatelessWidget {
+  const _MarkerCellShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(kPostHeroRadiusCollapsed),
+      child: const SizedBox(
+        width: double.infinity,
+        height: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: AppColors.surfaceSoft),
+            Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ArchivedMarkerPostTile extends StatelessWidget {
+  const _ArchivedMarkerPostTile({required this.marker, required this.post});
+
+  final ProfileMarkerModel marker;
+  final PostModel post;
+
+  static const _radius = kPostHeroRadiusCollapsed;
+
+  PostModel _seedMarkerIntoPost() {
+    // В архиве маркеров мы 100% знаем, что маркер архивный.
+    // Подмешиваем это в начальный `post`, чтобы меню действий сразу показывало "Разархивировать",
+    // даже если сеть/кубит ещё не успели догрузить marker payload.
+    return post.copyWith(
+      markerId: marker.id,
+      marker: PostLinkedMarker(
+        id: marker.id,
+        textEmoji: marker.textEmoji,
+        addressText: marker.addressText,
+        isArchived: true,
+        eventTime: marker.eventTime,
+        endTime: marker.endTime,
+        status: marker.status,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final first = post.media.isNotEmpty ? post.media.first : null;
+    final seeded = _seedMarkerIntoPost();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_radius),
+      child: Material(
+        color: AppColors.surfaceSoft,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(_radius),
+          onTap: () => context.router.push(PostDetailRoute(post: seeded)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(
+                child: buildPostHero(
+                  postId: post.id,
+                  child: first == null
+                      ? const PostMediaFramePlaceholder(shimmer: true)
+                      : SizedBox.expand(
+                          child: MediaWidget.previewTile(
+                            url: first.url,
+                            treatAsVideoFromModel: first.treatsAsVideoTile,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MarkerNullPostTile extends StatelessWidget {
+  const _MarkerNullPostTile({required this.marker});
+
+  final ProfileMarkerModel marker;
+
+  static const _radius = kPostHeroRadiusCollapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    final emoji = marker.textEmoji?.trim();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_radius),
+      child: Material(
+        color: AppColors.surfaceSoft,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(_radius),
+          onTap: () => context.router.push(
+            MarkerWithoutPostRoute(
+              markerId: marker.id,
+              textEmoji: marker.textEmoji,
+              title: marker.addressText,
+              eventTimeIso: marker.eventTime.toIso8601String(),
+              endTimeIso: marker.endTime.toIso8601String(),
+              status: marker.status,
+            ),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const PostMediaFramePlaceholder(shimmer: false),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    (emoji == null || emoji.isEmpty) ? '📍' : emoji,
+                    style: AppTextStyle.base(28, fontWeight: FontWeight.w900),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

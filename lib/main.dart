@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
@@ -16,7 +15,6 @@ Future<void> main() async {
     httpClient: supabaseHttpLoggingEnabled ? SupabaseLoggingHttpClient() : null,
   );
   await configureDependencies();
-
   await initializeDateFormatting('ru', null);
   runApp(const Application());
 }

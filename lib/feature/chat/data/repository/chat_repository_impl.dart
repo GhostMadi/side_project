@@ -2,13 +2,13 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:injectable/injectable.dart';
 import 'package:side_project/core/network/supabase_edge_functions_invoker.dart';
-import 'package:side_project/feature/chat/domain/chat_outgoing_attachment.dart';
 import 'package:side_project/feature/chat/data/models/chat_conversation_enriched.dart';
 import 'package:side_project/feature/chat/data/models/chat_conversation_model.dart';
 import 'package:side_project/feature/chat/data/models/chat_message_enriched.dart';
 import 'package:side_project/feature/chat/data/models/chat_message_model.dart';
 import 'package:side_project/feature/chat/data/models/chat_profile_mini_model.dart';
 import 'package:side_project/feature/chat/data/repository/chat_repository.dart';
+import 'package:side_project/feature/chat/domain/chat_outgoing_attachment.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 @LazySingleton(as: ChatRepository)
@@ -28,13 +28,7 @@ class ChatRepositoryImpl implements ChatRepository {
 
   @override
   Future<String> createGroup({required String title, required List<String> userIds}) async {
-    final res = await _client.rpc<dynamic>(
-      'create_group',
-      params: {
-        'p_title': title,
-        'p_user_ids': userIds,
-      },
-    );
+    final res = await _client.rpc<dynamic>('create_group', params: {'p_title': title, 'p_user_ids': userIds});
     if (res is String && res.isNotEmpty) return res;
     throw StateError('create_group: unexpected response ${res.runtimeType}');
   }
@@ -43,10 +37,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<void> addParticipants({required String conversationId, required List<String> userIds}) async {
     await _client.rpc<void>(
       'add_participants',
-      params: {
-        'p_conversation_id': conversationId,
-        'p_user_ids': userIds,
-      },
+      params: {'p_conversation_id': conversationId, 'p_user_ids': userIds},
     );
   }
 
@@ -54,10 +45,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<void> removeParticipant({required String conversationId, required String userId}) async {
     await _client.rpc<void>(
       'remove_participant',
-      params: {
-        'p_conversation_id': conversationId,
-        'p_user_id': userId,
-      },
+      params: {'p_conversation_id': conversationId, 'p_user_id': userId},
     );
   }
 
@@ -65,10 +53,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<List<ChatConversationEnriched>> listConversations({int limit = 30, int offset = 0}) async {
     final res = await _client.rpc<dynamic>(
       'list_conversations_enriched',
-      params: {
-        'p_limit': limit,
-        'p_offset': offset,
-      },
+      params: {'p_limit': limit, 'p_offset': offset},
     );
     if (res is! List) return const [];
     final out = <ChatConversationEnriched>[];
@@ -84,11 +69,22 @@ class ChatRepositoryImpl implements ChatRepository {
         createdAt: m['created_at'] == null ? null : DateTime.tryParse(m['created_at'].toString()),
       );
       final other = m['other_user'];
-      final otherUser = (other is Map) ? ChatProfileMiniModel.fromJson(Map<String, dynamic>.from(other)) : null;
+      final otherUser = (other is Map)
+          ? ChatProfileMiniModel.fromJson(Map<String, dynamic>.from(other))
+          : null;
       final last = m['last_message'];
       final lastMessage = (last is Map) ? ChatMessageModel.fromJson(Map<String, dynamic>.from(last)) : null;
-      final unread = (m['unread_count'] is int) ? (m['unread_count'] as int) : int.tryParse('${m['unread_count']}') ?? 0;
-      out.add(ChatConversationEnriched(conversation: conv, otherUser: otherUser, lastMessage: lastMessage, unreadCount: unread));
+      final unread = (m['unread_count'] is int)
+          ? (m['unread_count'] as int)
+          : int.tryParse('${m['unread_count']}') ?? 0;
+      out.add(
+        ChatConversationEnriched(
+          conversation: conv,
+          otherUser: otherUser,
+          lastMessage: lastMessage,
+          unreadCount: unread,
+        ),
+      );
     }
     return out;
   }
@@ -101,11 +97,7 @@ class ChatRepositoryImpl implements ChatRepository {
   }) async {
     final res = await _client.rpc<dynamic>(
       'list_messages_enriched',
-      params: {
-        'p_conversation_id': conversationId,
-        'p_limit': limit,
-        'p_before': before?.toIso8601String(),
-      },
+      params: {'p_conversation_id': conversationId, 'p_limit': limit, 'p_before': before?.toIso8601String()},
     );
     if (res is! List) return const [];
     final out = <ChatMessageEnriched>[];
@@ -121,10 +113,7 @@ class ChatRepositoryImpl implements ChatRepository {
     final id = messageId.trim();
     if (id.isEmpty) return null;
     try {
-      final res = await _client.rpc<dynamic>(
-        'get_message_enriched',
-        params: {'p_message_id': id},
-      );
+      final res = await _client.rpc<dynamic>('get_message_enriched', params: {'p_message_id': id});
       Map<String, dynamic>? rowMap;
       if (res is Map) {
         rowMap = Map<String, dynamic>.from(res);
@@ -306,10 +295,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<void> markRead({required String conversationId, String? lastMessageId}) async {
     await _client.rpc<void>(
       'mark_conversation_read',
-      params: {
-        'p_conversation_id': conversationId,
-        'p_last_message_id': lastMessageId,
-      },
+      params: {'p_conversation_id': conversationId, 'p_last_message_id': lastMessageId},
     );
   }
 
@@ -351,11 +337,7 @@ class ChatRepositoryImpl implements ChatRepository {
   }) async {
     final res = await _client.rpc<dynamic>(
       'search_messages',
-      params: {
-        'p_query': query,
-        'p_conversation_id': conversationId,
-        'p_limit': limit,
-      },
+      params: {'p_query': query, 'p_conversation_id': conversationId, 'p_limit': limit},
     );
     if (res is! List) return const [];
     final out = <({String conversationId, ChatMessageEnriched message})>[];
@@ -382,4 +364,3 @@ class ChatRepositoryImpl implements ChatRepository {
     return out;
   }
 }
-

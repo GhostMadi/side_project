@@ -1,15 +1,15 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:side_project/core/resources/color_settings/app_colors.dart';
-import 'package:side_project/core/shared/app_shimmer.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
-import 'package:side_project/feature/posts/data/models/post_media_type.dart';
+import 'package:side_project/core/shared/app_shimmer.dart';
+import 'package:side_project/core/shared/media_widget.dart';
+import 'package:side_project/feature/posts/data/models/post_media_model.dart';
 import 'package:side_project/feature/posts/data/models/post_model.dart';
 
 String postHeroTag(String postId) => 'post_hero_$postId';
 
-const double kPostHeroRadiusCollapsed = 14.0; // tile radius
+const double kPostHeroRadiusCollapsed = 20.0; // tile radius
 const double kPostHeroRadiusExpanded = 32.0; // detail radius
 
 Widget buildPostHero({required String postId, required Widget child}) {
@@ -47,7 +47,11 @@ Widget buildPostHero({required String postId, required Widget child}) {
 }
 
 /// Переиспользуемая сетка постов (Pinterest/masonry).
-/// [crossAxisCount]: в профиле обычно 3, на экране сохранённых по умолчанию 2.
+///
+/// Плитка поста берёт **первый** элемент [PostModel.media] (`sort_order` с бэка).
+/// Если первым стоит **видео**, в ячейке — только постер по соглашению имён (`…__poster.jpg`), сам ролик не грузим.
+///
+/// [crossAxisCount]: в профиле через [PostsListView] — 2 колонки; сохранённые по умолчанию 2.
 class PostsSection extends StatelessWidget {
   const PostsSection({
     super.key,
@@ -58,6 +62,7 @@ class PostsSection extends StatelessWidget {
   });
 
   final List<PostModel> posts;
+
   /// Состояние «сохранено мной» из enriched-RPC; если null — индикатор не рисуем.
   final Map<String, bool>? savedByPostId;
   final void Function(PostModel post)? onPostTap;
@@ -85,12 +90,7 @@ class PostsSection extends StatelessWidget {
 }
 
 class _PostsGrid extends StatelessWidget {
-  const _PostsGrid({
-    required this.posts,
-    this.savedByPostId,
-    this.onPostTap,
-    required this.crossAxisCount,
-  });
+  const _PostsGrid({required this.posts, this.savedByPostId, this.onPostTap, required this.crossAxisCount});
 
   final List<PostModel> posts;
   final Map<String, bool>? savedByPostId;
@@ -99,7 +99,7 @@ class _PostsGrid extends StatelessWidget {
 
   static final _aspectRe = RegExp(r'__ar-(\d+)x(\d+)', caseSensitive: false);
 
-  String? _aspectFromUrl(String url) {
+  static String? _aspectFromUrl(String url) {
     if (url.trim().isEmpty) return null;
     final u = Uri.tryParse(url);
     final path = (u?.path ?? url).toLowerCase();
@@ -111,44 +111,104 @@ class _PostsGrid extends StatelessWidget {
     return '${w}x$h';
   }
 
-  ({int cross, int main}) _spanForPost(PostModel post) {
+  static _PostGridAspectKind _aspectKind(PostModel post) {
     final url = post.media.isNotEmpty ? post.media.first.url : '';
-    final a = _aspectFromUrl(url);
-    final g = crossAxisCount.clamp(2, 6);
-    return switch (a) {
-      '16x9' => (cross: g, main: 1),
-      '9x16' => (cross: 1, main: 2),
-      // 1x1 and 3x4: render as normal 1x1 square tile
-      _ => (cross: 1, main: 1),
+    return switch (_aspectFromUrl(url)) {
+      '16x9' => _PostGridAspectKind.landscape169,
+      '9x16' => _PostGridAspectKind.portrait916,
+      _ => _PostGridAspectKind.square,
     };
   }
 
-  Widget _buildGridTile(PostModel post) {
-    final s = _spanForPost(post);
-    return StaggeredGridTile.count(
-      crossAxisCellCount: s.cross,
-      mainAxisCellCount: s.main,
-      child: _PostTile(
-        post: post,
-        isSaved: savedByPostId?[post.id] ?? false,
-        onTap: onPostTap,
-      ),
-    );
+  /// Сетка: **9×16** — одна колонка, высота 2 ячейки (вертикально); **16×9** — ровно 2 колонки
+  /// в ширину, высота 1; **остальное** (нет `__ar-…` в URL или не эти соотношения) — квадрат 1×1.
+  /// 16×9 при одной колонке сетки или если нет пары соседних колонок на одной «линии» — 1×1.
+  static List<({int cross, int main})> _computeTileSpans(List<PostModel> posts, int crossAxisCount) {
+    final n = crossAxisCount.clamp(1, 12);
+    final colTop = List<int>.filled(n, 0);
+    final out = <({int cross, int main})>[];
+
+    int leftmostMinCol() {
+      var idx = 0;
+      var minVal = colTop[0];
+      for (var i = 1; i < n; i++) {
+        if (colTop[i] < minVal) {
+          minVal = colTop[i];
+          idx = i;
+        }
+      }
+      return idx;
+    }
+
+    /// Первая слева пара столбцов [c, c+1] на минимальной «высоте» сетки.
+    int? pairAtMinForLandscape() {
+      if (n < 2) return null;
+      var minV = colTop[0];
+      for (var i = 1; i < n; i++) {
+        if (colTop[i] < minV) minV = colTop[i];
+      }
+      for (var c = 0; c < n - 1; c++) {
+        if (colTop[c] == minV && colTop[c + 1] == minV) return c;
+      }
+      return null;
+    }
+
+    for (final post in posts) {
+      switch (_aspectKind(post)) {
+        case _PostGridAspectKind.square:
+          final c = leftmostMinCol();
+          out.add((cross: 1, main: 1));
+          colTop[c] += 1;
+        case _PostGridAspectKind.portrait916:
+          final c = leftmostMinCol();
+          out.add((cross: 1, main: 2));
+          colTop[c] += 2;
+        case _PostGridAspectKind.landscape169:
+          final pair = pairAtMinForLandscape();
+          if (pair != null) {
+            const main = 1;
+            const cross = 2;
+            out.add((cross: cross, main: main));
+            colTop[pair] += main;
+            colTop[pair + 1] += main;
+          } else {
+            final c = leftmostMinCol();
+            out.add((cross: 1, main: 1));
+            colTop[c] += 1;
+          }
+      }
+    }
+
+    return out;
   }
 
   @override
   Widget build(BuildContext context) {
+    final spans = _computeTileSpans(posts, crossAxisCount);
     return Padding(
       padding: EdgeInsets.zero,
       child: StaggeredGrid.count(
         crossAxisCount: crossAxisCount,
         mainAxisSpacing: 2,
         crossAxisSpacing: 2,
-        children: [for (final post in posts) _buildGridTile(post)],
+        children: [
+          for (var i = 0; i < posts.length; i++)
+            StaggeredGridTile.count(
+              crossAxisCellCount: spans[i].cross,
+              mainAxisCellCount: spans[i].main,
+              child: _PostTile(
+                post: posts[i],
+                isSaved: savedByPostId?[posts[i].id] ?? false,
+                onTap: onPostTap,
+              ),
+            ),
+        ],
       ),
     );
   }
 }
+
+enum _PostGridAspectKind { square, portrait916, landscape169 }
 
 class _PostTile extends StatelessWidget {
   const _PostTile({required this.post, required this.isSaved, required this.onTap});
@@ -162,19 +222,6 @@ class _PostTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final first = post.media.isNotEmpty ? post.media.first : null;
-    String? previewUrl;
-    if (first != null) {
-      final raw = first.url.trim();
-      if (raw.isNotEmpty) {
-        if (first.type == PostMediaType.video) {
-          final p = first.posterUrl?.trim();
-          previewUrl = (p != null && p.isNotEmpty) ? p : null;
-        } else {
-          previewUrl = raw;
-        }
-      }
-    }
-    final hasUrl = previewUrl != null && previewUrl.isNotEmpty;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(_radius),
@@ -184,7 +231,21 @@ class _PostTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(_radius),
           onTap: onTap == null ? null : () => onTap!(post),
           child: Stack(
+            fit: StackFit.expand,
             children: [
+              Positioned.fill(
+                child: buildPostHero(
+                  postId: post.id,
+                  child: first == null
+                      ? const PostMediaFramePlaceholder(shimmer: true)
+                      : SizedBox.expand(
+                          child: MediaWidget.previewTile(
+                            url: first.url,
+                            treatAsVideoFromModel: first.treatsAsVideoTile,
+                          ),
+                        ),
+                ),
+              ),
               if (isSaved)
                 Positioned(
                   top: 6,
@@ -200,22 +261,6 @@ class _PostTile extends StatelessWidget {
                     ),
                   ),
                 ),
-              Positioned.fill(
-                child: buildPostHero(
-                  postId: post.id,
-                  child: !hasUrl
-                      ? const PostMediaFramePlaceholder(shimmer: true)
-                      : CachedNetworkImage(
-                          imageUrl: previewUrl.trim(),
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => const PostMediaFramePlaceholder(shimmer: true),
-                          errorWidget: (_, __, ___) => const PostMediaFramePlaceholder(shimmer: false),
-                          // Без повторного fade при возврате с детального экрана (кэш уже тёплый).
-                          fadeInDuration: Duration.zero,
-                          fadeOutDuration: Duration.zero,
-                        ),
-                ),
-              ),
             ],
           ),
         ),

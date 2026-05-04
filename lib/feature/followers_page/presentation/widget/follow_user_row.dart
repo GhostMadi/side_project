@@ -120,7 +120,6 @@ class _FollowUserRowState extends State<FollowUserRow> {
                                 width: 52,
                                 height: 52,
                                 fit: BoxFit.cover,
-                                thumbWidth: 72,
                               )
                             : const Icon(Icons.person_rounded, color: AppColors.iconMuted, size: 28),
                       ),

@@ -9,6 +9,9 @@ shadow_port = 54320
 [functions.create_post]
 verify_jwt = false
 
+[functions.upload_post_media_poster]
+verify_jwt = false
+
 [functions.register_post_view]
 verify_jwt = false
 

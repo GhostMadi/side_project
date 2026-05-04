@@ -73,6 +73,7 @@ class AppPillNavigationBar extends StatefulWidget {
     this.selectedIndex = 0,
     this.onSelectionChanged,
     this.height,
+    this.shrinkWrapMulti = false,
   });
 
   final List<AppPillNavItem> items;
@@ -81,6 +82,9 @@ class AppPillNavigationBar extends StatefulWidget {
 
   /// Высота контейнера; по умолчанию меньше для одного пункта, ~85 для нескольких.
   final double? height;
+
+  /// Если `true` и [items] больше одного — пилюля **узкая**, ширина от контента; иначе — на всю доступную ширину ([LayoutBuilder]).
+  final bool shrinkWrapMulti;
 
   @override
   State<AppPillNavigationBar> createState() => _AppPillNavigationBarState();
@@ -113,6 +117,9 @@ class _AppPillNavigationBarState extends State<AppPillNavigationBar> {
     }
     if (items.length == 1) {
       return _buildSingle(items.first);
+    }
+    if (widget.shrinkWrapMulti) {
+      return _buildMultiShrinkWrap(items);
     }
     return _buildMulti(items);
   }
@@ -171,6 +178,48 @@ class _AppPillNavigationBarState extends State<AppPillNavigationBar> {
     );
   }
 
+  static const _multiCompactMinCellW = 76.0;
+  static const _multiCompactIcon = 24.0;
+  static const _multiCompactLabelFs = 10.5;
+
+  /// Узкая пилюля: [Row] без [Expanded], ширина растёт с числом пунктов.
+  Widget _buildMultiShrinkWrap(List<AppPillNavItem> items) {
+    final h = widget.height ?? 60.0;
+    return SizedBox(
+      height: h,
+      child: IntrinsicWidth(
+        child: DecoratedBox(
+          decoration: appPillBarDecoration(),
+          child: Material(
+            color: Colors.transparent,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < items.length; i++) ...[
+                  if (i > 0) const _PillNavMultiSeparator(),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: _multiCompactMinCellW),
+                    child: _PillNavMultiCell(
+                      icon: items[i].icon,
+                      label: items[i].label,
+                      iconSize: _multiCompactIcon,
+                      labelFontSize: _multiCompactLabelFs,
+                      onTap: () {
+                        items[i].onTap?.call();
+                        setState(() => _index = i);
+                        widget.onSelectionChanged?.call(i);
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMulti(List<AppPillNavItem> items) {
     final h = widget.height ?? 85.0;
     return LayoutBuilder(
@@ -208,12 +257,35 @@ class _AppPillNavigationBarState extends State<AppPillNavigationBar> {
   }
 }
 
+class _PillNavMultiSeparator extends StatelessWidget {
+  const _PillNavMultiSeparator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 1,
+        height: 28,
+        color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.2),
+      ),
+    );
+  }
+}
+
 class _PillNavMultiCell extends StatelessWidget {
-  const _PillNavMultiCell({required this.icon, required this.label, required this.onTap});
+  const _PillNavMultiCell({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.iconSize = 26,
+    this.labelFontSize = 11,
+  });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final double iconSize;
+  final double labelFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -222,31 +294,34 @@ class _PillNavMultiCell extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         splashColor: AppColors.bottomBarActiveIcon.withValues(alpha: 0.12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 26,
-              color: AppColors.bottomBarActiveIcon,
-              shadows: [Shadow(color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.45), blurRadius: 6)],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: iconSize,
                 color: AppColors.bottomBarActiveIcon,
-                fontFamily: 'Manrope',
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.4,
+                shadows: [Shadow(color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.45), blurRadius: 6)],
               ),
-            ),
-          ],
+              SizedBox(height: iconSize >= 26 ? 4 : 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.bottomBarActiveIcon,
+                  fontFamily: 'Manrope',
+                  fontSize: labelFontSize,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

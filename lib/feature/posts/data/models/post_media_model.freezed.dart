@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PostMediaModel {
 
- String get id;@JsonKey(name: 'post_id') String get postId; String get url;@JsonKey(name: 'poster_url') String? get posterUrl;@JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) PostMediaType get type;@JsonKey(name: 'sort_order') int get sortOrder;@JsonKey(name: 'created_at') DateTime get createdAt;
+ String get id;@JsonKey(name: 'post_id') String get postId; String get url;@JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) PostMediaType get type;@JsonKey(name: 'sort_order') int get sortOrder;@JsonKey(name: 'created_at') DateTime get createdAt;
 /// Create a copy of PostMediaModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $PostMediaModelCopyWith<PostMediaModel> get copyWith => _$PostMediaModelCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PostMediaModel&&(identical(other.id, id) || other.id == id)&&(identical(other.postId, postId) || other.postId == postId)&&(identical(other.url, url) || other.url == url)&&(identical(other.posterUrl, posterUrl) || other.posterUrl == posterUrl)&&(identical(other.type, type) || other.type == type)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PostMediaModel&&(identical(other.id, id) || other.id == id)&&(identical(other.postId, postId) || other.postId == postId)&&(identical(other.url, url) || other.url == url)&&(identical(other.type, type) || other.type == type)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,postId,url,posterUrl,type,sortOrder,createdAt);
+int get hashCode => Object.hash(runtimeType,id,postId,url,type,sortOrder,createdAt);
 
 @override
 String toString() {
-  return 'PostMediaModel(id: $id, postId: $postId, url: $url, posterUrl: $posterUrl, type: $type, sortOrder: $sortOrder, createdAt: $createdAt)';
+  return 'PostMediaModel(id: $id, postId: $postId, url: $url, type: $type, sortOrder: $sortOrder, createdAt: $createdAt)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $PostMediaModelCopyWith<$Res>  {
   factory $PostMediaModelCopyWith(PostMediaModel value, $Res Function(PostMediaModel) _then) = _$PostMediaModelCopyWithImpl;
 @useResult
 $Res call({
- String id,@JsonKey(name: 'post_id') String postId, String url,@JsonKey(name: 'poster_url') String? posterUrl,@JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) PostMediaType type,@JsonKey(name: 'sort_order') int sortOrder,@JsonKey(name: 'created_at') DateTime createdAt
+ String id,@JsonKey(name: 'post_id') String postId, String url,@JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) PostMediaType type,@JsonKey(name: 'sort_order') int sortOrder,@JsonKey(name: 'created_at') DateTime createdAt
 });
 
 
@@ -65,13 +65,12 @@ class _$PostMediaModelCopyWithImpl<$Res>
 
 /// Create a copy of PostMediaModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? postId = null,Object? url = null,Object? posterUrl = freezed,Object? type = null,Object? sortOrder = null,Object? createdAt = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? postId = null,Object? url = null,Object? type = null,Object? sortOrder = null,Object? createdAt = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,postId: null == postId ? _self.postId : postId // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,posterUrl: freezed == posterUrl ? _self.posterUrl : posterUrl // ignore: cast_nullable_to_non_nullable
-as String?,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
+as String,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as PostMediaType,sortOrder: null == sortOrder ? _self.sortOrder : sortOrder // ignore: cast_nullable_to_non_nullable
 as int,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,
@@ -159,10 +158,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'post_id')  String postId,  String url, @JsonKey(name: 'poster_url')  String? posterUrl, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson)  PostMediaType type, @JsonKey(name: 'sort_order')  int sortOrder, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'post_id')  String postId,  String url, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson)  PostMediaType type, @JsonKey(name: 'sort_order')  int sortOrder, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PostMediaModel() when $default != null:
-return $default(_that.id,_that.postId,_that.url,_that.posterUrl,_that.type,_that.sortOrder,_that.createdAt);case _:
+return $default(_that.id,_that.postId,_that.url,_that.type,_that.sortOrder,_that.createdAt);case _:
   return orElse();
 
 }
@@ -180,10 +179,10 @@ return $default(_that.id,_that.postId,_that.url,_that.posterUrl,_that.type,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'post_id')  String postId,  String url, @JsonKey(name: 'poster_url')  String? posterUrl, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson)  PostMediaType type, @JsonKey(name: 'sort_order')  int sortOrder, @JsonKey(name: 'created_at')  DateTime createdAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'post_id')  String postId,  String url, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson)  PostMediaType type, @JsonKey(name: 'sort_order')  int sortOrder, @JsonKey(name: 'created_at')  DateTime createdAt)  $default,) {final _that = this;
 switch (_that) {
 case _PostMediaModel():
-return $default(_that.id,_that.postId,_that.url,_that.posterUrl,_that.type,_that.sortOrder,_that.createdAt);case _:
+return $default(_that.id,_that.postId,_that.url,_that.type,_that.sortOrder,_that.createdAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -200,10 +199,10 @@ return $default(_that.id,_that.postId,_that.url,_that.posterUrl,_that.type,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'post_id')  String postId,  String url, @JsonKey(name: 'poster_url')  String? posterUrl, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson)  PostMediaType type, @JsonKey(name: 'sort_order')  int sortOrder, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'post_id')  String postId,  String url, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson)  PostMediaType type, @JsonKey(name: 'sort_order')  int sortOrder, @JsonKey(name: 'created_at')  DateTime createdAt)?  $default,) {final _that = this;
 switch (_that) {
 case _PostMediaModel() when $default != null:
-return $default(_that.id,_that.postId,_that.url,_that.posterUrl,_that.type,_that.sortOrder,_that.createdAt);case _:
+return $default(_that.id,_that.postId,_that.url,_that.type,_that.sortOrder,_that.createdAt);case _:
   return null;
 
 }
@@ -215,13 +214,12 @@ return $default(_that.id,_that.postId,_that.url,_that.posterUrl,_that.type,_that
 @JsonSerializable()
 
 class _PostMediaModel implements PostMediaModel {
-  const _PostMediaModel({required this.id, @JsonKey(name: 'post_id') required this.postId, required this.url, @JsonKey(name: 'poster_url') this.posterUrl, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) required this.type, @JsonKey(name: 'sort_order') required this.sortOrder, @JsonKey(name: 'created_at') required this.createdAt});
+  const _PostMediaModel({required this.id, @JsonKey(name: 'post_id') required this.postId, required this.url, @JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) required this.type, @JsonKey(name: 'sort_order') required this.sortOrder, @JsonKey(name: 'created_at') required this.createdAt});
   factory _PostMediaModel.fromJson(Map<String, dynamic> json) => _$PostMediaModelFromJson(json);
 
 @override final  String id;
 @override@JsonKey(name: 'post_id') final  String postId;
 @override final  String url;
-@override@JsonKey(name: 'poster_url') final  String? posterUrl;
 @override@JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) final  PostMediaType type;
 @override@JsonKey(name: 'sort_order') final  int sortOrder;
 @override@JsonKey(name: 'created_at') final  DateTime createdAt;
@@ -239,16 +237,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PostMediaModel&&(identical(other.id, id) || other.id == id)&&(identical(other.postId, postId) || other.postId == postId)&&(identical(other.url, url) || other.url == url)&&(identical(other.posterUrl, posterUrl) || other.posterUrl == posterUrl)&&(identical(other.type, type) || other.type == type)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PostMediaModel&&(identical(other.id, id) || other.id == id)&&(identical(other.postId, postId) || other.postId == postId)&&(identical(other.url, url) || other.url == url)&&(identical(other.type, type) || other.type == type)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,postId,url,posterUrl,type,sortOrder,createdAt);
+int get hashCode => Object.hash(runtimeType,id,postId,url,type,sortOrder,createdAt);
 
 @override
 String toString() {
-  return 'PostMediaModel(id: $id, postId: $postId, url: $url, posterUrl: $posterUrl, type: $type, sortOrder: $sortOrder, createdAt: $createdAt)';
+  return 'PostMediaModel(id: $id, postId: $postId, url: $url, type: $type, sortOrder: $sortOrder, createdAt: $createdAt)';
 }
 
 
@@ -259,7 +257,7 @@ abstract mixin class _$PostMediaModelCopyWith<$Res> implements $PostMediaModelCo
   factory _$PostMediaModelCopyWith(_PostMediaModel value, $Res Function(_PostMediaModel) _then) = __$PostMediaModelCopyWithImpl;
 @override @useResult
 $Res call({
- String id,@JsonKey(name: 'post_id') String postId, String url,@JsonKey(name: 'poster_url') String? posterUrl,@JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) PostMediaType type,@JsonKey(name: 'sort_order') int sortOrder,@JsonKey(name: 'created_at') DateTime createdAt
+ String id,@JsonKey(name: 'post_id') String postId, String url,@JsonKey(fromJson: PostMediaType.fromJson, toJson: _postMediaTypeToJson) PostMediaType type,@JsonKey(name: 'sort_order') int sortOrder,@JsonKey(name: 'created_at') DateTime createdAt
 });
 
 
@@ -276,13 +274,12 @@ class __$PostMediaModelCopyWithImpl<$Res>
 
 /// Create a copy of PostMediaModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? postId = null,Object? url = null,Object? posterUrl = freezed,Object? type = null,Object? sortOrder = null,Object? createdAt = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? postId = null,Object? url = null,Object? type = null,Object? sortOrder = null,Object? createdAt = null,}) {
   return _then(_PostMediaModel(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,postId: null == postId ? _self.postId : postId // ignore: cast_nullable_to_non_nullable
 as String,url: null == url ? _self.url : url // ignore: cast_nullable_to_non_nullable
-as String,posterUrl: freezed == posterUrl ? _self.posterUrl : posterUrl // ignore: cast_nullable_to_non_nullable
-as String?,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
+as String,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as PostMediaType,sortOrder: null == sortOrder ? _self.sortOrder : sortOrder // ignore: cast_nullable_to_non_nullable
 as int,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,

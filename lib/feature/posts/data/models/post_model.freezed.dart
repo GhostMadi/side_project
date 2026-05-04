@@ -15,7 +15,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PostModel {
 
- String get id;@JsonKey(name: 'user_id') String get userId;@JsonKey(name: 'cluster_id') String? get clusterId; String? get title; String? get subtitle; String? get description;@JsonKey(name: 'is_archived') bool get isArchived;@JsonKey(name: 'deleted_at') DateTime? get deletedAt;@JsonKey(name: 'likes_count') int get likesCount;@JsonKey(name: 'dislikes_count') int get dislikesCount;@JsonKey(name: 'comments_count') int get commentsCount;@JsonKey(name: 'saves_count') int get savesCount;@JsonKey(name: 'sends_count') int get sendsCount;@JsonKey(name: 'views_count') int get viewsCount;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'updated_at') DateTime get updatedAt;@JsonKey(name: 'post_media') List<PostMediaModel> get media;
+ String get id;@JsonKey(name: 'user_id') String get userId;@JsonKey(name: 'cluster_id') String? get clusterId;/// Обратная ссылка на маркер (пара с [markers.post_id]).
+@JsonKey(name: 'marker_id') String? get markerId; String? get title; String? get description;@JsonKey(name: 'is_archived') bool get isArchived;@JsonKey(name: 'deleted_at') DateTime? get deletedAt;@JsonKey(name: 'likes_count') int get likesCount;@JsonKey(name: 'dislikes_count') int get dislikesCount;@JsonKey(name: 'comments_count') int get commentsCount;@JsonKey(name: 'saves_count') int get savesCount;@JsonKey(name: 'sends_count') int get sendsCount;@JsonKey(name: 'views_count') int get viewsCount;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'updated_at') DateTime get updatedAt;/// Опциональное окно сессии поста (внутри lifetime маркера). См. миграцию `posts_event_session_time`.
+@JsonKey(name: 'event_time') DateTime? get eventTime;@JsonKey(name: 'end_time') DateTime? get endTime;@JsonKey(name: 'post_media') List<PostMediaModel> get media;/// См. [get_post_enriched] (join [markers]).
+ PostLinkedMarker? get marker;
 /// Create a copy of PostModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +31,16 @@ $PostModelCopyWith<PostModel> get copyWith => _$PostModelCopyWithImpl<PostModel>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PostModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&(identical(other.title, title) || other.title == title)&&(identical(other.subtitle, subtitle) || other.subtitle == subtitle)&&(identical(other.description, description) || other.description == description)&&(identical(other.isArchived, isArchived) || other.isArchived == isArchived)&&(identical(other.deletedAt, deletedAt) || other.deletedAt == deletedAt)&&(identical(other.likesCount, likesCount) || other.likesCount == likesCount)&&(identical(other.dislikesCount, dislikesCount) || other.dislikesCount == dislikesCount)&&(identical(other.commentsCount, commentsCount) || other.commentsCount == commentsCount)&&(identical(other.savesCount, savesCount) || other.savesCount == savesCount)&&(identical(other.sendsCount, sendsCount) || other.sendsCount == sendsCount)&&(identical(other.viewsCount, viewsCount) || other.viewsCount == viewsCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other.media, media));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PostModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&(identical(other.markerId, markerId) || other.markerId == markerId)&&(identical(other.title, title) || other.title == title)&&(identical(other.description, description) || other.description == description)&&(identical(other.isArchived, isArchived) || other.isArchived == isArchived)&&(identical(other.deletedAt, deletedAt) || other.deletedAt == deletedAt)&&(identical(other.likesCount, likesCount) || other.likesCount == likesCount)&&(identical(other.dislikesCount, dislikesCount) || other.dislikesCount == dislikesCount)&&(identical(other.commentsCount, commentsCount) || other.commentsCount == commentsCount)&&(identical(other.savesCount, savesCount) || other.savesCount == savesCount)&&(identical(other.sendsCount, sendsCount) || other.sendsCount == sendsCount)&&(identical(other.viewsCount, viewsCount) || other.viewsCount == viewsCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.eventTime, eventTime) || other.eventTime == eventTime)&&(identical(other.endTime, endTime) || other.endTime == endTime)&&const DeepCollectionEquality().equals(other.media, media)&&(identical(other.marker, marker) || other.marker == marker));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,userId,clusterId,title,subtitle,description,isArchived,deletedAt,likesCount,dislikesCount,commentsCount,savesCount,sendsCount,viewsCount,createdAt,updatedAt,const DeepCollectionEquality().hash(media));
+int get hashCode => Object.hashAll([runtimeType,id,userId,clusterId,markerId,title,description,isArchived,deletedAt,likesCount,dislikesCount,commentsCount,savesCount,sendsCount,viewsCount,createdAt,updatedAt,eventTime,endTime,const DeepCollectionEquality().hash(media),marker]);
 
 @override
 String toString() {
-  return 'PostModel(id: $id, userId: $userId, clusterId: $clusterId, title: $title, subtitle: $subtitle, description: $description, isArchived: $isArchived, deletedAt: $deletedAt, likesCount: $likesCount, dislikesCount: $dislikesCount, commentsCount: $commentsCount, savesCount: $savesCount, sendsCount: $sendsCount, viewsCount: $viewsCount, createdAt: $createdAt, updatedAt: $updatedAt, media: $media)';
+  return 'PostModel(id: $id, userId: $userId, clusterId: $clusterId, markerId: $markerId, title: $title, description: $description, isArchived: $isArchived, deletedAt: $deletedAt, likesCount: $likesCount, dislikesCount: $dislikesCount, commentsCount: $commentsCount, savesCount: $savesCount, sendsCount: $sendsCount, viewsCount: $viewsCount, createdAt: $createdAt, updatedAt: $updatedAt, eventTime: $eventTime, endTime: $endTime, media: $media, marker: $marker)';
 }
 
 
@@ -48,11 +51,11 @@ abstract mixin class $PostModelCopyWith<$Res>  {
   factory $PostModelCopyWith(PostModel value, $Res Function(PostModel) _then) = _$PostModelCopyWithImpl;
 @useResult
 $Res call({
- String id,@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'cluster_id') String? clusterId, String? title, String? subtitle, String? description,@JsonKey(name: 'is_archived') bool isArchived,@JsonKey(name: 'deleted_at') DateTime? deletedAt,@JsonKey(name: 'likes_count') int likesCount,@JsonKey(name: 'dislikes_count') int dislikesCount,@JsonKey(name: 'comments_count') int commentsCount,@JsonKey(name: 'saves_count') int savesCount,@JsonKey(name: 'sends_count') int sendsCount,@JsonKey(name: 'views_count') int viewsCount,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt,@JsonKey(name: 'post_media') List<PostMediaModel> media
+ String id,@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'cluster_id') String? clusterId,@JsonKey(name: 'marker_id') String? markerId, String? title, String? description,@JsonKey(name: 'is_archived') bool isArchived,@JsonKey(name: 'deleted_at') DateTime? deletedAt,@JsonKey(name: 'likes_count') int likesCount,@JsonKey(name: 'dislikes_count') int dislikesCount,@JsonKey(name: 'comments_count') int commentsCount,@JsonKey(name: 'saves_count') int savesCount,@JsonKey(name: 'sends_count') int sendsCount,@JsonKey(name: 'views_count') int viewsCount,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt,@JsonKey(name: 'event_time') DateTime? eventTime,@JsonKey(name: 'end_time') DateTime? endTime,@JsonKey(name: 'post_media') List<PostMediaModel> media, PostLinkedMarker? marker
 });
 
 
-
+$PostLinkedMarkerCopyWith<$Res>? get marker;
 
 }
 /// @nodoc
@@ -65,13 +68,13 @@ class _$PostModelCopyWithImpl<$Res>
 
 /// Create a copy of PostModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? userId = null,Object? clusterId = freezed,Object? title = freezed,Object? subtitle = freezed,Object? description = freezed,Object? isArchived = null,Object? deletedAt = freezed,Object? likesCount = null,Object? dislikesCount = null,Object? commentsCount = null,Object? savesCount = null,Object? sendsCount = null,Object? viewsCount = null,Object? createdAt = null,Object? updatedAt = null,Object? media = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? userId = null,Object? clusterId = freezed,Object? markerId = freezed,Object? title = freezed,Object? description = freezed,Object? isArchived = null,Object? deletedAt = freezed,Object? likesCount = null,Object? dislikesCount = null,Object? commentsCount = null,Object? savesCount = null,Object? sendsCount = null,Object? viewsCount = null,Object? createdAt = null,Object? updatedAt = null,Object? eventTime = freezed,Object? endTime = freezed,Object? media = null,Object? marker = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String,clusterId: freezed == clusterId ? _self.clusterId : clusterId // ignore: cast_nullable_to_non_nullable
+as String?,markerId: freezed == markerId ? _self.markerId : markerId // ignore: cast_nullable_to_non_nullable
 as String?,title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String?,subtitle: freezed == subtitle ? _self.subtitle : subtitle // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,isArchived: null == isArchived ? _self.isArchived : isArchived // ignore: cast_nullable_to_non_nullable
 as bool,deletedAt: freezed == deletedAt ? _self.deletedAt : deletedAt // ignore: cast_nullable_to_non_nullable
@@ -83,11 +86,26 @@ as int,sendsCount: null == sendsCount ? _self.sendsCount : sendsCount // ignore:
 as int,viewsCount: null == viewsCount ? _self.viewsCount : viewsCount // ignore: cast_nullable_to_non_nullable
 as int,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,media: null == media ? _self.media : media // ignore: cast_nullable_to_non_nullable
-as List<PostMediaModel>,
+as DateTime,eventTime: freezed == eventTime ? _self.eventTime : eventTime // ignore: cast_nullable_to_non_nullable
+as DateTime?,endTime: freezed == endTime ? _self.endTime : endTime // ignore: cast_nullable_to_non_nullable
+as DateTime?,media: null == media ? _self.media : media // ignore: cast_nullable_to_non_nullable
+as List<PostMediaModel>,marker: freezed == marker ? _self.marker : marker // ignore: cast_nullable_to_non_nullable
+as PostLinkedMarker?,
   ));
 }
+/// Create a copy of PostModel
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$PostLinkedMarkerCopyWith<$Res>? get marker {
+    if (_self.marker == null) {
+    return null;
+  }
 
+  return $PostLinkedMarkerCopyWith<$Res>(_self.marker!, (value) {
+    return _then(_self.copyWith(marker: value));
+  });
+}
 }
 
 
@@ -169,10 +187,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'cluster_id')  String? clusterId,  String? title,  String? subtitle,  String? description, @JsonKey(name: 'is_archived')  bool isArchived, @JsonKey(name: 'deleted_at')  DateTime? deletedAt, @JsonKey(name: 'likes_count')  int likesCount, @JsonKey(name: 'dislikes_count')  int dislikesCount, @JsonKey(name: 'comments_count')  int commentsCount, @JsonKey(name: 'saves_count')  int savesCount, @JsonKey(name: 'sends_count')  int sendsCount, @JsonKey(name: 'views_count')  int viewsCount, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'post_media')  List<PostMediaModel> media)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'cluster_id')  String? clusterId, @JsonKey(name: 'marker_id')  String? markerId,  String? title,  String? description, @JsonKey(name: 'is_archived')  bool isArchived, @JsonKey(name: 'deleted_at')  DateTime? deletedAt, @JsonKey(name: 'likes_count')  int likesCount, @JsonKey(name: 'dislikes_count')  int dislikesCount, @JsonKey(name: 'comments_count')  int commentsCount, @JsonKey(name: 'saves_count')  int savesCount, @JsonKey(name: 'sends_count')  int sendsCount, @JsonKey(name: 'views_count')  int viewsCount, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'event_time')  DateTime? eventTime, @JsonKey(name: 'end_time')  DateTime? endTime, @JsonKey(name: 'post_media')  List<PostMediaModel> media,  PostLinkedMarker? marker)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PostModel() when $default != null:
-return $default(_that.id,_that.userId,_that.clusterId,_that.title,_that.subtitle,_that.description,_that.isArchived,_that.deletedAt,_that.likesCount,_that.dislikesCount,_that.commentsCount,_that.savesCount,_that.sendsCount,_that.viewsCount,_that.createdAt,_that.updatedAt,_that.media);case _:
+return $default(_that.id,_that.userId,_that.clusterId,_that.markerId,_that.title,_that.description,_that.isArchived,_that.deletedAt,_that.likesCount,_that.dislikesCount,_that.commentsCount,_that.savesCount,_that.sendsCount,_that.viewsCount,_that.createdAt,_that.updatedAt,_that.eventTime,_that.endTime,_that.media,_that.marker);case _:
   return orElse();
 
 }
@@ -190,10 +208,10 @@ return $default(_that.id,_that.userId,_that.clusterId,_that.title,_that.subtitle
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'cluster_id')  String? clusterId,  String? title,  String? subtitle,  String? description, @JsonKey(name: 'is_archived')  bool isArchived, @JsonKey(name: 'deleted_at')  DateTime? deletedAt, @JsonKey(name: 'likes_count')  int likesCount, @JsonKey(name: 'dislikes_count')  int dislikesCount, @JsonKey(name: 'comments_count')  int commentsCount, @JsonKey(name: 'saves_count')  int savesCount, @JsonKey(name: 'sends_count')  int sendsCount, @JsonKey(name: 'views_count')  int viewsCount, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'post_media')  List<PostMediaModel> media)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id, @JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'cluster_id')  String? clusterId, @JsonKey(name: 'marker_id')  String? markerId,  String? title,  String? description, @JsonKey(name: 'is_archived')  bool isArchived, @JsonKey(name: 'deleted_at')  DateTime? deletedAt, @JsonKey(name: 'likes_count')  int likesCount, @JsonKey(name: 'dislikes_count')  int dislikesCount, @JsonKey(name: 'comments_count')  int commentsCount, @JsonKey(name: 'saves_count')  int savesCount, @JsonKey(name: 'sends_count')  int sendsCount, @JsonKey(name: 'views_count')  int viewsCount, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'event_time')  DateTime? eventTime, @JsonKey(name: 'end_time')  DateTime? endTime, @JsonKey(name: 'post_media')  List<PostMediaModel> media,  PostLinkedMarker? marker)  $default,) {final _that = this;
 switch (_that) {
 case _PostModel():
-return $default(_that.id,_that.userId,_that.clusterId,_that.title,_that.subtitle,_that.description,_that.isArchived,_that.deletedAt,_that.likesCount,_that.dislikesCount,_that.commentsCount,_that.savesCount,_that.sendsCount,_that.viewsCount,_that.createdAt,_that.updatedAt,_that.media);case _:
+return $default(_that.id,_that.userId,_that.clusterId,_that.markerId,_that.title,_that.description,_that.isArchived,_that.deletedAt,_that.likesCount,_that.dislikesCount,_that.commentsCount,_that.savesCount,_that.sendsCount,_that.viewsCount,_that.createdAt,_that.updatedAt,_that.eventTime,_that.endTime,_that.media,_that.marker);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -210,10 +228,10 @@ return $default(_that.id,_that.userId,_that.clusterId,_that.title,_that.subtitle
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'cluster_id')  String? clusterId,  String? title,  String? subtitle,  String? description, @JsonKey(name: 'is_archived')  bool isArchived, @JsonKey(name: 'deleted_at')  DateTime? deletedAt, @JsonKey(name: 'likes_count')  int likesCount, @JsonKey(name: 'dislikes_count')  int dislikesCount, @JsonKey(name: 'comments_count')  int commentsCount, @JsonKey(name: 'saves_count')  int savesCount, @JsonKey(name: 'sends_count')  int sendsCount, @JsonKey(name: 'views_count')  int viewsCount, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'post_media')  List<PostMediaModel> media)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id, @JsonKey(name: 'user_id')  String userId, @JsonKey(name: 'cluster_id')  String? clusterId, @JsonKey(name: 'marker_id')  String? markerId,  String? title,  String? description, @JsonKey(name: 'is_archived')  bool isArchived, @JsonKey(name: 'deleted_at')  DateTime? deletedAt, @JsonKey(name: 'likes_count')  int likesCount, @JsonKey(name: 'dislikes_count')  int dislikesCount, @JsonKey(name: 'comments_count')  int commentsCount, @JsonKey(name: 'saves_count')  int savesCount, @JsonKey(name: 'sends_count')  int sendsCount, @JsonKey(name: 'views_count')  int viewsCount, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'updated_at')  DateTime updatedAt, @JsonKey(name: 'event_time')  DateTime? eventTime, @JsonKey(name: 'end_time')  DateTime? endTime, @JsonKey(name: 'post_media')  List<PostMediaModel> media,  PostLinkedMarker? marker)?  $default,) {final _that = this;
 switch (_that) {
 case _PostModel() when $default != null:
-return $default(_that.id,_that.userId,_that.clusterId,_that.title,_that.subtitle,_that.description,_that.isArchived,_that.deletedAt,_that.likesCount,_that.dislikesCount,_that.commentsCount,_that.savesCount,_that.sendsCount,_that.viewsCount,_that.createdAt,_that.updatedAt,_that.media);case _:
+return $default(_that.id,_that.userId,_that.clusterId,_that.markerId,_that.title,_that.description,_that.isArchived,_that.deletedAt,_that.likesCount,_that.dislikesCount,_that.commentsCount,_that.savesCount,_that.sendsCount,_that.viewsCount,_that.createdAt,_that.updatedAt,_that.eventTime,_that.endTime,_that.media,_that.marker);case _:
   return null;
 
 }
@@ -225,14 +243,15 @@ return $default(_that.id,_that.userId,_that.clusterId,_that.title,_that.subtitle
 @JsonSerializable()
 
 class _PostModel implements PostModel {
-  const _PostModel({required this.id, @JsonKey(name: 'user_id') required this.userId, @JsonKey(name: 'cluster_id') this.clusterId, this.title, this.subtitle, this.description, @JsonKey(name: 'is_archived') required this.isArchived, @JsonKey(name: 'deleted_at') this.deletedAt, @JsonKey(name: 'likes_count') required this.likesCount, @JsonKey(name: 'dislikes_count') required this.dislikesCount, @JsonKey(name: 'comments_count') required this.commentsCount, @JsonKey(name: 'saves_count') required this.savesCount, @JsonKey(name: 'sends_count') required this.sendsCount, @JsonKey(name: 'views_count') required this.viewsCount, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'updated_at') required this.updatedAt, @JsonKey(name: 'post_media') final  List<PostMediaModel> media = const []}): _media = media;
+  const _PostModel({required this.id, @JsonKey(name: 'user_id') required this.userId, @JsonKey(name: 'cluster_id') this.clusterId, @JsonKey(name: 'marker_id') this.markerId, this.title, this.description, @JsonKey(name: 'is_archived') required this.isArchived, @JsonKey(name: 'deleted_at') this.deletedAt, @JsonKey(name: 'likes_count') required this.likesCount, @JsonKey(name: 'dislikes_count') required this.dislikesCount, @JsonKey(name: 'comments_count') required this.commentsCount, @JsonKey(name: 'saves_count') required this.savesCount, @JsonKey(name: 'sends_count') required this.sendsCount, @JsonKey(name: 'views_count') required this.viewsCount, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'updated_at') required this.updatedAt, @JsonKey(name: 'event_time') this.eventTime, @JsonKey(name: 'end_time') this.endTime, @JsonKey(name: 'post_media') final  List<PostMediaModel> media = const [], this.marker}): _media = media;
   factory _PostModel.fromJson(Map<String, dynamic> json) => _$PostModelFromJson(json);
 
 @override final  String id;
 @override@JsonKey(name: 'user_id') final  String userId;
 @override@JsonKey(name: 'cluster_id') final  String? clusterId;
+/// Обратная ссылка на маркер (пара с [markers.post_id]).
+@override@JsonKey(name: 'marker_id') final  String? markerId;
 @override final  String? title;
-@override final  String? subtitle;
 @override final  String? description;
 @override@JsonKey(name: 'is_archived') final  bool isArchived;
 @override@JsonKey(name: 'deleted_at') final  DateTime? deletedAt;
@@ -244,6 +263,9 @@ class _PostModel implements PostModel {
 @override@JsonKey(name: 'views_count') final  int viewsCount;
 @override@JsonKey(name: 'created_at') final  DateTime createdAt;
 @override@JsonKey(name: 'updated_at') final  DateTime updatedAt;
+/// Опциональное окно сессии поста (внутри lifetime маркера). См. миграцию `posts_event_session_time`.
+@override@JsonKey(name: 'event_time') final  DateTime? eventTime;
+@override@JsonKey(name: 'end_time') final  DateTime? endTime;
  final  List<PostMediaModel> _media;
 @override@JsonKey(name: 'post_media') List<PostMediaModel> get media {
   if (_media is EqualUnmodifiableListView) return _media;
@@ -251,6 +273,8 @@ class _PostModel implements PostModel {
   return EqualUnmodifiableListView(_media);
 }
 
+/// См. [get_post_enriched] (join [markers]).
+@override final  PostLinkedMarker? marker;
 
 /// Create a copy of PostModel
 /// with the given fields replaced by the non-null parameter values.
@@ -265,16 +289,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PostModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&(identical(other.title, title) || other.title == title)&&(identical(other.subtitle, subtitle) || other.subtitle == subtitle)&&(identical(other.description, description) || other.description == description)&&(identical(other.isArchived, isArchived) || other.isArchived == isArchived)&&(identical(other.deletedAt, deletedAt) || other.deletedAt == deletedAt)&&(identical(other.likesCount, likesCount) || other.likesCount == likesCount)&&(identical(other.dislikesCount, dislikesCount) || other.dislikesCount == dislikesCount)&&(identical(other.commentsCount, commentsCount) || other.commentsCount == commentsCount)&&(identical(other.savesCount, savesCount) || other.savesCount == savesCount)&&(identical(other.sendsCount, sendsCount) || other.sendsCount == sendsCount)&&(identical(other.viewsCount, viewsCount) || other.viewsCount == viewsCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&const DeepCollectionEquality().equals(other._media, _media));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PostModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.clusterId, clusterId) || other.clusterId == clusterId)&&(identical(other.markerId, markerId) || other.markerId == markerId)&&(identical(other.title, title) || other.title == title)&&(identical(other.description, description) || other.description == description)&&(identical(other.isArchived, isArchived) || other.isArchived == isArchived)&&(identical(other.deletedAt, deletedAt) || other.deletedAt == deletedAt)&&(identical(other.likesCount, likesCount) || other.likesCount == likesCount)&&(identical(other.dislikesCount, dislikesCount) || other.dislikesCount == dislikesCount)&&(identical(other.commentsCount, commentsCount) || other.commentsCount == commentsCount)&&(identical(other.savesCount, savesCount) || other.savesCount == savesCount)&&(identical(other.sendsCount, sendsCount) || other.sendsCount == sendsCount)&&(identical(other.viewsCount, viewsCount) || other.viewsCount == viewsCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.eventTime, eventTime) || other.eventTime == eventTime)&&(identical(other.endTime, endTime) || other.endTime == endTime)&&const DeepCollectionEquality().equals(other._media, _media)&&(identical(other.marker, marker) || other.marker == marker));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,userId,clusterId,title,subtitle,description,isArchived,deletedAt,likesCount,dislikesCount,commentsCount,savesCount,sendsCount,viewsCount,createdAt,updatedAt,const DeepCollectionEquality().hash(_media));
+int get hashCode => Object.hashAll([runtimeType,id,userId,clusterId,markerId,title,description,isArchived,deletedAt,likesCount,dislikesCount,commentsCount,savesCount,sendsCount,viewsCount,createdAt,updatedAt,eventTime,endTime,const DeepCollectionEquality().hash(_media),marker]);
 
 @override
 String toString() {
-  return 'PostModel(id: $id, userId: $userId, clusterId: $clusterId, title: $title, subtitle: $subtitle, description: $description, isArchived: $isArchived, deletedAt: $deletedAt, likesCount: $likesCount, dislikesCount: $dislikesCount, commentsCount: $commentsCount, savesCount: $savesCount, sendsCount: $sendsCount, viewsCount: $viewsCount, createdAt: $createdAt, updatedAt: $updatedAt, media: $media)';
+  return 'PostModel(id: $id, userId: $userId, clusterId: $clusterId, markerId: $markerId, title: $title, description: $description, isArchived: $isArchived, deletedAt: $deletedAt, likesCount: $likesCount, dislikesCount: $dislikesCount, commentsCount: $commentsCount, savesCount: $savesCount, sendsCount: $sendsCount, viewsCount: $viewsCount, createdAt: $createdAt, updatedAt: $updatedAt, eventTime: $eventTime, endTime: $endTime, media: $media, marker: $marker)';
 }
 
 
@@ -285,11 +309,11 @@ abstract mixin class _$PostModelCopyWith<$Res> implements $PostModelCopyWith<$Re
   factory _$PostModelCopyWith(_PostModel value, $Res Function(_PostModel) _then) = __$PostModelCopyWithImpl;
 @override @useResult
 $Res call({
- String id,@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'cluster_id') String? clusterId, String? title, String? subtitle, String? description,@JsonKey(name: 'is_archived') bool isArchived,@JsonKey(name: 'deleted_at') DateTime? deletedAt,@JsonKey(name: 'likes_count') int likesCount,@JsonKey(name: 'dislikes_count') int dislikesCount,@JsonKey(name: 'comments_count') int commentsCount,@JsonKey(name: 'saves_count') int savesCount,@JsonKey(name: 'sends_count') int sendsCount,@JsonKey(name: 'views_count') int viewsCount,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt,@JsonKey(name: 'post_media') List<PostMediaModel> media
+ String id,@JsonKey(name: 'user_id') String userId,@JsonKey(name: 'cluster_id') String? clusterId,@JsonKey(name: 'marker_id') String? markerId, String? title, String? description,@JsonKey(name: 'is_archived') bool isArchived,@JsonKey(name: 'deleted_at') DateTime? deletedAt,@JsonKey(name: 'likes_count') int likesCount,@JsonKey(name: 'dislikes_count') int dislikesCount,@JsonKey(name: 'comments_count') int commentsCount,@JsonKey(name: 'saves_count') int savesCount,@JsonKey(name: 'sends_count') int sendsCount,@JsonKey(name: 'views_count') int viewsCount,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'updated_at') DateTime updatedAt,@JsonKey(name: 'event_time') DateTime? eventTime,@JsonKey(name: 'end_time') DateTime? endTime,@JsonKey(name: 'post_media') List<PostMediaModel> media, PostLinkedMarker? marker
 });
 
 
-
+@override $PostLinkedMarkerCopyWith<$Res>? get marker;
 
 }
 /// @nodoc
@@ -302,13 +326,13 @@ class __$PostModelCopyWithImpl<$Res>
 
 /// Create a copy of PostModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? userId = null,Object? clusterId = freezed,Object? title = freezed,Object? subtitle = freezed,Object? description = freezed,Object? isArchived = null,Object? deletedAt = freezed,Object? likesCount = null,Object? dislikesCount = null,Object? commentsCount = null,Object? savesCount = null,Object? sendsCount = null,Object? viewsCount = null,Object? createdAt = null,Object? updatedAt = null,Object? media = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? userId = null,Object? clusterId = freezed,Object? markerId = freezed,Object? title = freezed,Object? description = freezed,Object? isArchived = null,Object? deletedAt = freezed,Object? likesCount = null,Object? dislikesCount = null,Object? commentsCount = null,Object? savesCount = null,Object? sendsCount = null,Object? viewsCount = null,Object? createdAt = null,Object? updatedAt = null,Object? eventTime = freezed,Object? endTime = freezed,Object? media = null,Object? marker = freezed,}) {
   return _then(_PostModel(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String,clusterId: freezed == clusterId ? _self.clusterId : clusterId // ignore: cast_nullable_to_non_nullable
+as String?,markerId: freezed == markerId ? _self.markerId : markerId // ignore: cast_nullable_to_non_nullable
 as String?,title: freezed == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
-as String?,subtitle: freezed == subtitle ? _self.subtitle : subtitle // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,isArchived: null == isArchived ? _self.isArchived : isArchived // ignore: cast_nullable_to_non_nullable
 as bool,deletedAt: freezed == deletedAt ? _self.deletedAt : deletedAt // ignore: cast_nullable_to_non_nullable
@@ -320,12 +344,27 @@ as int,sendsCount: null == sendsCount ? _self.sendsCount : sendsCount // ignore:
 as int,viewsCount: null == viewsCount ? _self.viewsCount : viewsCount // ignore: cast_nullable_to_non_nullable
 as int,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,updatedAt: null == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,media: null == media ? _self._media : media // ignore: cast_nullable_to_non_nullable
-as List<PostMediaModel>,
+as DateTime,eventTime: freezed == eventTime ? _self.eventTime : eventTime // ignore: cast_nullable_to_non_nullable
+as DateTime?,endTime: freezed == endTime ? _self.endTime : endTime // ignore: cast_nullable_to_non_nullable
+as DateTime?,media: null == media ? _self._media : media // ignore: cast_nullable_to_non_nullable
+as List<PostMediaModel>,marker: freezed == marker ? _self.marker : marker // ignore: cast_nullable_to_non_nullable
+as PostLinkedMarker?,
   ));
 }
 
+/// Create a copy of PostModel
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$PostLinkedMarkerCopyWith<$Res>? get marker {
+    if (_self.marker == null) {
+    return null;
+  }
 
+  return $PostLinkedMarkerCopyWith<$Res>(_self.marker!, (value) {
+    return _then(_self.copyWith(marker: value));
+  });
+}
 }
 
 // dart format on

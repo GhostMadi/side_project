@@ -34,36 +34,65 @@ class PostDetailCubit extends Cubit<PostDetailState> {
       emit(const PostDetailState.loading());
     }
     try {
-      // Один RPC: пост + my_reaction + my_saved (как в enriched-ленте).
-      final item = await _repository.getPostEnriched(postId);
+      // Быстрый слой: пост + media + мини-данные автора.
+      // Маркерные данные (event card) догружаем отдельным запросом только если marker_id есть.
+      final base = await _repository.getByIdWithAuthorMini(postId);
       if (isClosed) return;
-      if (item == null) {
+      if (base == null) {
         emit(const PostDetailState.notFound());
         return;
       }
-      final post = item.post;
-      final reaction = switch (item.myReactionKind) {
+      final post = base.post;
+      final k = await _repository.getCachedMyReactionKind(postId);
+      final reaction = switch (k) {
         'like' => PostReaction.like,
         'dislike' => PostReaction.dislike,
         _ => PostReaction.none,
       };
+      final isSaved = (await _repository.getCachedIsPostSaved(postId)) ?? false;
       emit(
         PostDetailState.loaded(
           post: post,
           reaction: reaction,
-          authorUsername: item.authorUsername,
-          authorAvatarUrl: item.authorAvatarUrl,
-          isSaved: item.mySaved,
+          authorUsername: base.username,
+          authorAvatarUrl: base.avatarUrl,
+          isSaved: isSaved,
         ),
       );
       unawaited(
         _profileCache.write(
           post.userId,
-          username: item.authorUsername,
-          avatarUrl: item.authorAvatarUrl,
+          username: base.username,
+          avatarUrl: base.avatarUrl,
         ),
       );
       unawaited(_repository.syncPendingReactions());
+
+      final markerId = post.markerId?.trim();
+      if (markerId == null || markerId.isEmpty) return;
+      if (post.marker != null) return;
+
+      // Догружаем маркер (event card) только для постов с marker_id.
+      unawaited(() async {
+        try {
+          final item = await _repository.getPostEnriched(postId);
+          if (isClosed) return;
+          final cur = state;
+          if (cur is! _Loaded || cur.post.id != postId) return;
+          if (item == null) return;
+          emit(
+            PostDetailState.loaded(
+              post: item.post,
+              reaction: cur.reaction,
+              authorUsername: item.authorUsername ?? cur.authorUsername,
+              authorAvatarUrl: item.authorAvatarUrl ?? cur.authorAvatarUrl,
+              isSaved: cur.isSaved,
+            ),
+          );
+        } catch (_) {
+          // best-effort: keep base UI
+        }
+      }());
     } catch (e) {
       if (isClosed) return;
       emit(PostDetailState.error('$e'));
@@ -209,11 +238,51 @@ class PostDetailCubit extends Cubit<PostDetailState> {
     final cur = state;
     if (cur is! _Loaded) return;
     try {
+      final markerId = cur.post.markerId?.trim();
+      if (markerId != null && markerId.isNotEmpty) {
+        await _repository.setMarkerArchived(markerId, archived);
+        if (isClosed) return;
+        final m = cur.post.marker;
+        emit(
+          PostDetailState.loaded(
+            post: cur.post.copyWith(marker: m == null ? null : m.copyWith(isArchived: archived)),
+            reaction: cur.reaction,
+            authorUsername: cur.authorUsername,
+            authorAvatarUrl: cur.authorAvatarUrl,
+            isSaved: cur.isSaved,
+          ),
+        );
+        return;
+      }
+
       await _repository.setPostArchived(postId, archived);
       if (isClosed) return;
       emit(
         PostDetailState.loaded(
           post: cur.post.copyWith(isArchived: archived),
+          reaction: cur.reaction,
+          authorUsername: cur.authorUsername,
+          authorAvatarUrl: cur.authorAvatarUrl,
+          isSaved: cur.isSaved,
+        ),
+      );
+    } catch (e) {
+      if (isClosed) return;
+      emit(PostDetailState.error('$e'));
+    }
+  }
+
+  Future<void> setPostCluster(String? clusterId) async {
+    final postId = _postId;
+    if (postId == null) return;
+    final cur = state;
+    if (cur is! _Loaded) return;
+    try {
+      await _repository.setPostClusterId(postId, clusterId);
+      if (isClosed) return;
+      emit(
+        PostDetailState.loaded(
+          post: cur.post.copyWith(clusterId: clusterId),
           reaction: cur.reaction,
           authorUsername: cur.authorUsername,
           authorAvatarUrl: cur.authorAvatarUrl,

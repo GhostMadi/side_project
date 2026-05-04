@@ -33,6 +33,12 @@ abstract class PostsRepository {
     String? cursorPostId,
     String? clusterId,
     bool onlyWithoutCluster = false,
+
+    /// Посты с [PostModel.markerId] не попадают (сетка профиля без дубля с вкладкой «маркеры»).
+    bool excludeWithMarker = false,
+
+    /// Только посты с [PostModel.markerId] (вкладка «события / маркеры»). Не сочетать с [excludeWithMarker].
+    bool onlyWithMarker = false,
   });
 
   /// Hot 24h одним RPC (MV + пост + автор + моя реакция).
@@ -40,6 +46,25 @@ abstract class PostsRepository {
 
   /// Пост по id (с медиа).
   Future<PostModel?> getById(String postId);
+
+  /// Пост + мини-данные автора (username/full_name/avatar_url) одним запросом по post id.
+  Future<({PostModel post, String? username, String? fullName, String? avatarUrl})?> getByIdWithAuthorMini(
+    String postId,
+  );
+
+  /// Пост, привязанный к маркеру ([PostModel.markerId]); в БД максимум один на маркер.
+  Future<PostModel?> getByMarkerId(String markerId);
+
+  /// Пост + мини-данные автора (username/full_name/avatar_url) одним запросом по marker_id.
+  Future<({PostModel post, String? username, String? fullName, String? avatarUrl})?> getByMarkerIdWithAuthorMini(
+    String markerId,
+  );
+
+  /// Быстрый in-memory кэш постов (для карты/тикетов).
+  PostModel? getCachedPostById(String postId);
+
+  /// Prefetch постов (best-effort): кладёт в кэш.
+  Future<void> prefetchPostsByIds(List<String> postIds);
 
   /// Один RPC: пост + автор + моя реакция + сохранено (для детального экрана).
   Future<PostFeedItem?> getPostEnriched(String postId);
@@ -90,6 +115,12 @@ abstract class PostsRepository {
 
   /// Скрыть пост из лент (архив) или вернуть в ленту — только свой пост.
   Future<void> setPostArchived(String postId, bool archived);
+
+  /// Архивировать/разархивировать маркер (событие).
+  Future<void> setMarkerArchived(String markerId, bool archived);
+
+  /// Привязать пост к своему кластеру или убрать привязку (`cluster_id = null`).
+  Future<void> setPostClusterId(String postId, String? clusterId);
 }
 
 @LazySingleton(as: PostsRepository)
@@ -103,6 +134,36 @@ class PostsRepositoryImpl implements PostsRepository {
   final ProfileMiniCacheStorage _profileMiniCache;
 
   String? get _uid => _client.auth.currentUser?.id;
+
+  // --------------------------------------------------------------------------- Map speed: in-memory post cache (5–10 min)
+  static const Duration _postCacheTtl = Duration(minutes: 10);
+  final Map<String, ({PostModel post, DateTime storedAt})> _postCache = {};
+
+  @override
+  PostModel? getCachedPostById(String postId) {
+    final id = postId.trim();
+    if (id.isEmpty) return null;
+    final e = _postCache[id];
+    if (e == null) return null;
+    if (DateTime.now().difference(e.storedAt) > _postCacheTtl) {
+      _postCache.remove(id);
+      return null;
+    }
+    return e.post;
+  }
+
+  void _cachePost(PostModel post) {
+    final id = post.id.trim();
+    if (id.isEmpty) return;
+    _postCache[id] = (post: post, storedAt: DateTime.now());
+    // simple bound: keep last ~80 entries
+    if (_postCache.length > 80) {
+      final keys = _postCache.keys.take(20).toList();
+      for (final k in keys) {
+        _postCache.remove(k);
+      }
+    }
+  }
 
   @override
   Future<List<PostModel>> listUserFeed(String userId, {int limit = 24, int offset = 0}) async {
@@ -162,25 +223,38 @@ class PostsRepositoryImpl implements PostsRepository {
     String? cursorPostId,
     String? clusterId,
     bool onlyWithoutCluster = false,
+    bool excludeWithMarker = false,
+    bool onlyWithMarker = false,
   }) async {
     if (userId.trim().isEmpty) return const [];
-    // Не передаём p_cluster_id / p_only_without_cluster, если фильтр не нужен — иначе PostgREST
-    // может не сопоставить запрос со старой 4-параметровой функцией на БД без миграции → 404.
-    final params = <String, dynamic>{
+    assert(
+      !(excludeWithMarker && onlyWithMarker),
+      'excludeWithMarker and onlyWithMarker are mutually exclusive',
+    );
+    // Один аргумент p_args (jsonb) на бэке — PostgREST без двусмысленных перегрузок (PGRST202 / 404).
+    final cid = clusterId?.trim();
+    final hasCursor =
+        cursorPostId != null && cursorCreatedAt != null && cursorPostId.isNotEmpty;
+    final cursorAtIso = hasCursor ? cursorCreatedAt.toUtc().toIso8601String() : null;
+    final cursorId = hasCursor ? cursorPostId : null;
+
+    final useCluster = !onlyWithoutCluster && cid != null && cid.isNotEmpty;
+    final cluster = useCluster ? cid : null;
+
+    final pArgs = <String, dynamic>{
       'p_user_id': userId,
       'p_limit': limit,
+      'p_cursor_created_at': cursorAtIso,
+      'p_cursor_id': cursorId,
+      'p_cluster_id': cluster,
+      'p_only_without_cluster': onlyWithoutCluster,
+      'p_exclude_with_marker': onlyWithMarker ? false : excludeWithMarker,
+      'p_only_with_marker': onlyWithMarker,
     };
-    final cid = clusterId?.trim();
-    if (onlyWithoutCluster) {
-      params['p_only_without_cluster'] = true;
-    } else if (cid != null && cid.isNotEmpty) {
-      params['p_cluster_id'] = cid;
-    }
-    if (cursorPostId != null && cursorCreatedAt != null && cursorPostId.isNotEmpty) {
-      params['p_cursor_created_at'] = cursorCreatedAt.toUtc().toIso8601String();
-      params['p_cursor_id'] = cursorPostId;
-    }
-    final res = await _client.rpc('list_user_feed_enriched_cursor', params: params);
+    final res = await _client.rpc(
+      'list_user_feed_enriched_cursor',
+      params: <String, dynamic>{'p_args': pArgs},
+    );
     return _consumeEnrichedRpc(res);
   }
 
@@ -270,7 +344,116 @@ class PostsRepositoryImpl implements PostsRepository {
   Future<PostModel?> getById(String postId) async {
     final data = await _client.from('posts').select('*, post_media(*)').eq('id', postId).maybeSingle();
     if (data == null) return null;
-    return PostModel.fromJson(Map<String, dynamic>.from(data));
+    final post = PostModel.fromJson(Map<String, dynamic>.from(data));
+    _cachePost(post);
+    return post;
+  }
+
+  @override
+  Future<({PostModel post, String? username, String? fullName, String? avatarUrl})?> getByIdWithAuthorMini(
+    String postId,
+  ) async {
+    final id = postId.trim();
+    if (id.isEmpty) return null;
+    final data = await _client
+        .from('posts')
+        .select(
+          '*, post_media(*), profiles:profiles!posts_user_id_fkey(username, full_name, avatar_url), marker:markers!posts_marker_id_fkey(id, text_emoji, address_text, is_archived, event_time, end_time, status)',
+        )
+        .eq('id', id)
+        .maybeSingle();
+    if (data == null) return null;
+
+    final m = Map<String, dynamic>.from(data);
+    final post = PostModel.fromJson(m);
+    _cachePost(post);
+
+    String? username;
+    String? fullName;
+    String? avatarUrl;
+    final pr = m['profiles'];
+    if (pr is Map) {
+      final pm = Map<String, dynamic>.from(pr);
+      final u = (pm['username'] as String?)?.trim();
+      final fn = (pm['full_name'] as String?)?.trim();
+      final av = (pm['avatar_url'] as String?)?.trim();
+      username = (u != null && u.isNotEmpty) ? u : null;
+      fullName = (fn != null && fn.isNotEmpty) ? fn : null;
+      avatarUrl = (av != null && av.isNotEmpty) ? av : null;
+    }
+
+    return (post: post, username: username, fullName: fullName, avatarUrl: avatarUrl);
+  }
+
+  @override
+  Future<PostModel?> getByMarkerId(String markerId) async {
+    final id = markerId.trim();
+    if (id.isEmpty) return null;
+    final data = await _client.from('posts').select('*, post_media(*)').eq('marker_id', id).maybeSingle();
+    if (data == null) return null;
+    final post = PostModel.fromJson(Map<String, dynamic>.from(data));
+    _cachePost(post);
+    return post;
+  }
+
+  @override
+  Future<({PostModel post, String? username, String? fullName, String? avatarUrl})?> getByMarkerIdWithAuthorMini(
+    String markerId,
+  ) async {
+    final id = markerId.trim();
+    if (id.isEmpty) return null;
+    final data = await _client
+        .from('posts')
+        .select(
+          '*, post_media(*), profiles:profiles!posts_user_id_fkey(username, full_name, avatar_url), marker:markers!posts_marker_id_fkey(id, text_emoji, address_text, is_archived, event_time, end_time, status)',
+        )
+        .eq('marker_id', id)
+        .maybeSingle();
+    if (data == null) return null;
+
+    final m = Map<String, dynamic>.from(data);
+    final post = PostModel.fromJson(m);
+    _cachePost(post);
+
+    String? username;
+    String? fullName;
+    String? avatarUrl;
+    final pr = m['profiles'];
+    if (pr is Map) {
+      final pm = Map<String, dynamic>.from(pr);
+      final u = (pm['username'] as String?)?.trim();
+      final fn = (pm['full_name'] as String?)?.trim();
+      final av = (pm['avatar_url'] as String?)?.trim();
+      username = (u != null && u.isNotEmpty) ? u : null;
+      fullName = (fn != null && fn.isNotEmpty) ? fn : null;
+      avatarUrl = (av != null && av.isNotEmpty) ? av : null;
+    }
+
+    return (post: post, username: username, fullName: fullName, avatarUrl: avatarUrl);
+  }
+
+  @override
+  Future<void> prefetchPostsByIds(List<String> postIds) async {
+    if (postIds.isEmpty) return;
+    final ids = <String>{
+      for (final x in postIds)
+        if (x.trim().isNotEmpty) x.trim(),
+    }.toList();
+    if (ids.isEmpty) return;
+
+    ids.removeWhere((id) => getCachedPostById(id) != null);
+    if (ids.isEmpty) return;
+
+    final batch = ids.length > 20 ? ids.sublist(0, 20) : ids;
+    try {
+      final rows = await _client.from('posts').select('*, post_media(*)').inFilter('id', batch);
+      for (final raw in (rows as List)) {
+        final post = PostModel.fromJson(Map<String, dynamic>.from(raw as Map));
+        _cachePost(post);
+      }
+    } catch (_) {
+      // best-effort
+    }
   }
 
   @override
@@ -523,5 +706,25 @@ class PostsRepositoryImpl implements PostsRepository {
       throw StateError('setPostArchived: not authenticated');
     }
     await _client.from('posts').update({'is_archived': archived}).eq('id', postId).eq('user_id', uid);
+  }
+
+  @override
+  Future<void> setMarkerArchived(String markerId, bool archived) async {
+    final uid = _uid;
+    if (uid == null || uid.isEmpty) return;
+    final id = markerId.trim();
+    if (id.isEmpty) return;
+    await _client.from('markers').update({'is_archived': archived}).eq('id', id).eq('owner_id', uid);
+  }
+
+  @override
+  Future<void> setPostClusterId(String postId, String? clusterId) async {
+    final uid = _uid;
+    if (uid == null || uid.isEmpty) {
+      throw StateError('setPostClusterId: not authenticated');
+    }
+    final trimmed = clusterId?.trim();
+    final value = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    await _client.from('posts').update({'cluster_id': value}).eq('id', postId).eq('user_id', uid);
   }
 }

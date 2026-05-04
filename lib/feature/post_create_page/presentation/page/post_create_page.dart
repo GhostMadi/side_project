@@ -15,7 +15,10 @@ import 'package:side_project/core/resources/color_settings/app_colors.dart';
 import 'package:side_project/core/resources/icons/app_icons.dart';
 import 'package:side_project/core/resources/text_settings/app_text_style.dart';
 import 'package:side_project/core/shared/app_appbar.dart';
+import 'package:side_project/core/shared/app_circular_progress_indicator.dart';
 import 'package:side_project/core/shared/app_ig_adjust_panel.dart';
+import 'package:side_project/core/shared/app_date_selector.dart';
+import 'package:side_project/core/shared/app_duration_selector.dart';
 import 'package:side_project/core/shared/app_single_select.dart';
 import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_text_field.dart';
@@ -26,13 +29,13 @@ import 'package:side_project/feature/post_create_page/data/models/post_create_me
 import 'package:side_project/feature/post_create_page/presentation/cubit/post_create_cubit.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_gallery_step.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_create_models.dart';
-import 'package:side_project/feature/post_create_page/presentation/page/post_create_video_preview.dart';
 import 'package:side_project/feature/post_create_page/presentation/page/post_edit_gpu_preview.dart';
-import 'package:side_project/feature/post_create_page/presentation/widget/post_create_video_cover_sheet.dart';
 import 'package:side_project/feature/post_create_page/presentation/widget/post_reorder_bottom_sheet.dart';
 import 'package:side_project/feature/post_create_page/presentation/widget/post_reorder_card.dart';
 import 'package:side_project/feature/profile/data/models/profile_search_hit.dart';
 import 'package:side_project/feature/profile/presentation/widget/profile_people_search_sheet.dart';
+import 'package:side_project/feature/profile_page/data/models/profile_marker_model.dart';
+import 'package:side_project/feature/profile_page/data/repository/profile_markers_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const int _kCropEditorMaxSide = 2048;
@@ -130,13 +133,16 @@ String? _nullableTrimField(String value) {
 /// [customThirdStep] — свой UI вместо стандартного экрана публикации (получает [MediaPickEditOutcome]).
 @RoutePage()
 class PostCreatePage extends StatelessWidget {
-  const PostCreatePage({super.key, this.mediaConfig, this.customThirdStep});
+  const PostCreatePage({super.key, this.mediaConfig, this.customThirdStep, this.markerId});
 
   /// Если null — [MediaPickEditConfig.postDefault].
   final MediaPickEditConfig? mediaConfig;
 
   /// Не сериализуется в auto_route; только при открытии через `Navigator` из кода.
   final Widget Function(BuildContext context, MediaPickEditOutcome outcome)? customThirdStep;
+
+  /// If provided, the created post will be attached to this marker (`markers.post_id`).
+  final String? markerId;
 
   @override
   Widget build(BuildContext context) {
@@ -149,16 +155,17 @@ class PostCreatePage extends StatelessWidget {
         }
         return cubit;
       },
-      child: _PostCreateFlow(mediaConfig: mediaConfig, customThirdStep: customThirdStep),
+      child: _PostCreateFlow(mediaConfig: mediaConfig, customThirdStep: customThirdStep, markerId: markerId),
     );
   }
 }
 
 class _PostCreateFlow extends StatefulWidget {
-  const _PostCreateFlow({this.mediaConfig, this.customThirdStep});
+  const _PostCreateFlow({this.mediaConfig, this.customThirdStep, this.markerId});
 
   final MediaPickEditConfig? mediaConfig;
   final Widget Function(BuildContext context, MediaPickEditOutcome outcome)? customThirdStep;
+  final String? markerId;
 
   @override
   State<_PostCreateFlow> createState() => _PostCreateFlowState();
@@ -193,8 +200,14 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
 
   final _formKey = GlobalKey<FormState>();
   final _titleCtrl = TextEditingController();
-  final _subtitleCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
+  DateTime? _sessionEventTime;
+  int? _sessionDurationMinutes;
+
+  /// Окно жизни маркера (родитель для сеанса поста).
+  ProfileMarkerModel? _markerForPost;
+  bool _markerBoundsLoading = false;
+  bool _markerBoundsFailed = false;
 
   _PostStep _step = _PostStep.gallery;
 
@@ -235,6 +248,142 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
     _liveEditParams = ValueNotifier<PostImageEditParams>(const PostImageEditParams());
     _stripDisplayParams = ValueNotifier<PostImageEditParams>(const PostImageEditParams());
     _editZoomController.addListener(_onEditZoomChanged);
+    final mid = widget.markerId?.trim();
+    if (mid != null && mid.isNotEmpty) {
+      _markerBoundsLoading = true;
+      unawaited(_loadMarkerBounds(mid));
+    }
+  }
+
+  Future<void> _loadMarkerBounds(String markerId) async {
+    try {
+      final m = await sl<ProfileMarkersRepository>().getMarkerByIdForCurrentUser(markerId);
+      if (!mounted) return;
+      setState(() {
+        _markerForPost = m;
+        _markerBoundsLoading = false;
+        _markerBoundsFailed = m == null;
+      });
+      _clampSessionFieldsToMarker();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _markerBoundsLoading = false;
+        _markerBoundsFailed = true;
+      });
+    }
+  }
+
+  void _clampSessionFieldsToMarker() {
+    final m = _markerForPost;
+    if (m == null) return;
+    var changed = false;
+    final et0 = _sessionEventTime;
+    if (et0 != null) {
+      var next = et0;
+      if (next.isBefore(m.eventTime)) next = m.eventTime;
+      if (next.isAfter(m.endTime)) next = m.endTime;
+      if (next != et0) {
+        _sessionEventTime = next;
+        changed = true;
+      }
+    }
+    final dm = _sessionDurationMinutes;
+    final et2 = _sessionEventTime;
+    if (dm != null && et2 != null) {
+      final maxDm = m.endTime.difference(et2).inMinutes;
+      if (maxDm < 1) {
+        _sessionDurationMinutes = null;
+        changed = true;
+      } else {
+        final step = _sessionDurationStepMinutes();
+        final cap = dm <= maxDm ? dm : maxDm;
+        final snapped = step <= 1 ? cap.clamp(1, maxDm) : (((cap / step).floor() * step).clamp(1, maxDm));
+        if (snapped != dm) {
+          _sessionDurationMinutes = snapped;
+          changed = true;
+        }
+      }
+    }
+    if (changed && mounted) setState(() {});
+  }
+
+  DateTime _sessionPickerMin() {
+    final m = _markerForPost;
+    if (m != null) return m.eventTime;
+    return DateTime.now().subtract(const Duration(days: 1));
+  }
+
+  DateTime _sessionPickerMax() {
+    final m = _markerForPost;
+    if (m != null) return m.endTime;
+    return DateTime.now().add(const Duration(days: 365));
+  }
+
+  int _sessionDurationMaxMinutes() {
+    final m = _markerForPost;
+    if (m == null) return 24 * 60;
+    final et = _sessionEventTime;
+    if (et != null) {
+      final span = m.endTime.difference(et).inMinutes;
+      return span.clamp(1, 24 * 60);
+    }
+    final full = m.endTime.difference(m.eventTime).inMinutes;
+    return full.clamp(1, 24 * 60);
+  }
+
+  int _sessionDurationMinMinutes() {
+    final maxM = _sessionDurationMaxMinutes();
+    return maxM >= 15 ? 15 : 1;
+  }
+
+  /// У короткого окна маркера шаг 1 мин, иначе 15 как раньше.
+  int _sessionDurationStepMinutes() {
+    final maxM = _sessionDurationMaxMinutes();
+    return maxM < 30 ? 1 : 15;
+  }
+
+  bool _validateMarkerSessionForSubmit() {
+    final mid = widget.markerId?.trim();
+    if (mid == null || mid.isEmpty) return true;
+    if (_markerBoundsLoading) {
+      AppSnackBar.show(context, message: 'Загружается маркер…', kind: AppSnackBarKind.info);
+      return false;
+    }
+    if (_markerForPost == null) {
+      AppSnackBar.show(context, message: 'Не удалось загрузить маркер', kind: AppSnackBarKind.error);
+      return false;
+    }
+    final m = _markerForPost!;
+    final et = _sessionEventTime;
+    final dm = _sessionDurationMinutes;
+    if (et == null && dm == null) return true;
+    if (dm != null && et == null) {
+      AppSnackBar.show(context, message: 'Укажите время начала сеанса или очистите длительность', kind: AppSnackBarKind.info);
+      return false;
+    }
+    if (et != null) {
+      if (et.isBefore(m.eventTime) || et.isAfter(m.endTime)) {
+        AppSnackBar.show(
+          context,
+          message: 'Время начала должно быть внутри окна маркера',
+          kind: AppSnackBarKind.info,
+        );
+        return false;
+      }
+    }
+    if (et != null && dm != null) {
+      final postEnd = et.add(Duration(minutes: dm));
+      if (postEnd.isAfter(m.endTime)) {
+        AppSnackBar.show(
+          context,
+          message: 'Сеанс поста не должен выходить за время маркера',
+          kind: AppSnackBarKind.info,
+        );
+        return false;
+      }
+    }
+    return true;
   }
 
   void _onEditZoomChanged() {
@@ -260,7 +409,6 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
     _stripDisplayParams.dispose();
     _editPageCtrl.dispose();
     _titleCtrl.dispose();
-    _subtitleCtrl.dispose();
     _descriptionCtrl.dispose();
     super.dispose();
   }
@@ -306,16 +454,11 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
   Future<void> _goToDetails() async {
     final baked = <Uint8List?>[];
     for (var i = 0; i < _slots.length; i++) {
-      final s = _slots[i];
-      if (s.isVideo) {
+      try {
+        final raw = await _slots[i].displayFile.readAsBytes();
+        baked.add(bakePostImageEdit(raw, _params[i]));
+      } catch (_) {
         baked.add(null);
-      } else {
-        try {
-          final raw = await s.displayFile.readAsBytes();
-          baked.add(bakePostImageEdit(raw, _params[i]));
-        } catch (_) {
-          baked.add(null);
-        }
       }
     }
     if (!mounted) {
@@ -327,45 +470,6 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
       _activeAdjust = null;
       _clearCropSession();
     });
-    unawaited(_prefillVideoPostersFromFile());
-  }
-
-  /// Авто-кадр для превью на шаге «Подробности», если пользователь не открывал экран обложки.
-  Future<void> _prefillVideoPostersFromFile() async {
-    for (var i = 0; i < _slots.length; i++) {
-      final s = _slots[i];
-      if (!s.isVideo) {
-        continue;
-      }
-      if (s.videoPosterJpeg != null && s.videoPosterJpeg!.isNotEmpty) {
-        continue;
-      }
-      final jpeg = await captureVideoPosterJpeg(s.displayFile);
-      if (!mounted || jpeg == null) {
-        continue;
-      }
-      setState(() {
-        _slots[i] = _slots[i].copyWithVideoPoster(jpeg);
-      });
-    }
-  }
-
-  Future<void> _pickVideoCover(int index) async {
-    final s = _slots[index];
-    if (!s.isVideo) {
-      return;
-    }
-    final bytes = await showModalBottomSheet<Uint8List>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => PostCreateVideoCoverSheet(file: s.displayFile, initialPoster: s.videoPosterJpeg),
-    );
-    if (bytes != null && bytes.isNotEmpty && mounted) {
-      setState(() {
-        _slots[index] = s.copyWithVideoPoster(bytes);
-      });
-    }
   }
 
   void _openDetailsMediaViewer(int initialIndex) {
@@ -468,47 +572,15 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         final dpr = MediaQuery.devicePixelRatioOf(context);
         final thumbPx = (64 * dpr).round().clamp(96, 256);
 
-        final Widget thumb = slot.isVideo
-            ? (slot.videoPosterJpeg != null && slot.videoPosterJpeg!.isNotEmpty
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.memory(
-                          slot.videoPosterJpeg!,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                          filterQuality: FilterQuality.low,
-                          cacheWidth: thumbPx,
-                          cacheHeight: thumbPx,
-                          errorBuilder: (_, __, ___) => ColoredBox(color: AppColors.inputBackground),
-                        ),
-                        Align(
-                          alignment: Alignment.center,
-                          child: Icon(
-                            Icons.play_circle_fill,
-                            color: Colors.white.withValues(alpha: 0.88),
-                            size: 28,
-                          ),
-                        ),
-                      ],
-                    )
-                  : ColoredBox(
-                      color: AppColors.inputBackground,
-                      child: Icon(
-                        Icons.play_circle_fill,
-                        color: AppColors.postEditorOnSurfaceMuted.withValues(alpha: 0.85),
-                        size: 32,
-                      ),
-                    ))
-            : Image.file(
-                slot.displayFile,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.low,
-                cacheWidth: thumbPx,
-                cacheHeight: thumbPx,
-                errorBuilder: (_, __, ___) => ColoredBox(color: AppColors.inputBackground),
-              );
+        final Widget thumb = Image.file(
+          slot.displayFile,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.low,
+          cacheWidth: thumbPx,
+          cacheHeight: thumbPx,
+          errorBuilder: (_, __, ___) => ColoredBox(color: AppColors.inputBackground),
+        );
 
         return postReorderListRow(
           key: ValueKey<String>('edit-reorder-${slot.displayFile.path}'),
@@ -517,7 +589,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
           itemCount: _slots.length,
           card: PostReorderCard.editor(
             index: index,
-            mediaLabel: slot.isVideo ? 'Видео' : 'Фото',
+            mediaLabel: 'Фото',
             thumbnail: thumb,
             dragHandle: ReorderableDragStartListener(
               index: index,
@@ -538,44 +610,61 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
       final s = _slots[i];
       final aspect = s.aspect.trim().isEmpty ? null : s.aspect.trim();
       if (s.isVideo) {
-        final bytes = await s.displayFile.readAsBytes();
-        final path = s.displayFile.path;
-        final ext = path.contains('.') ? path.split('.').last.toLowerCase() : 'mp4';
-        final mime = switch (ext) {
-          'mov' => 'video/quicktime',
-          'webm' => 'video/webm',
-          _ => 'video/mp4',
-        };
-        var poster = s.videoPosterJpeg;
-        poster ??= await captureVideoPosterJpeg(s.displayFile);
-        out.add(
-          PostCreateMediaItem.video(
-            bytes: bytes,
-            mime: mime,
-            ext: ext,
-            aspect: aspect,
-            posterJpeg: poster,
-          ),
-        );
-      } else {
-        final baked = _bakedForDetails[i];
-        if (baked == null) {
-          throw StateError('Изображение не обработано');
-        }
-        out.add(PostCreateMediaItem.image(bytes: baked, aspect: aspect));
+        throw StateError('Видео в постах сейчас недоступно. Выберите только фото.');
       }
+      final baked = _bakedForDetails[i];
+      if (baked == null) {
+        throw StateError('Изображение не обработано');
+      }
+      out.add(PostCreateMediaItem.image(bytes: baked, aspect: aspect));
     }
     return out;
   }
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+    if (!_validateMarkerSessionForSubmit()) return;
     final cubit = context.read<PostCreateCubit>();
     try {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: 0.45),
+        builder: (ctx) => PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 26),
+              decoration: BoxDecoration(
+                color: AppColors.bottomBarColor.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: AppColors.bottomBarActiveIcon.withValues(alpha: 0.18)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const AppCircularProgressIndicator(dimension: 36, strokeWidth: 2.5),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Подготовка медиа…',
+                    style: AppTextStyle.base(15, color: AppColors.postEditorOnSurface),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
       final media = await _buildMediaForDraft();
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
       final draft = PostCreateDraft(
+        markerId: widget.markerId,
+        eventTime: widget.markerId != null && widget.markerId!.trim().isNotEmpty ? _sessionEventTime : null,
+        durationMinutes: widget.markerId != null && widget.markerId!.trim().isNotEmpty ? _sessionDurationMinutes : null,
         title: _nullableTrimField(_titleCtrl.text),
-        subtitle: _nullableTrimField(_subtitleCtrl.text),
         description: _nullableTrimField(_descriptionCtrl.text),
         clusterId: _clusterId == _kClusterNone ? null : _clusterId,
         media: media,
@@ -589,14 +678,14 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         context.router.maybePop();
       } else {
         final err = cubit.state.maybeWhen(ready: (_, __, ___, msg) => msg, orElse: () => null);
-        AppSnackBar.show(
-          context,
-          message: err ?? 'Не удалось создать пост',
-          kind: AppSnackBarKind.error,
-        );
+        AppSnackBar.show(context, message: err ?? 'Не удалось создать пост', kind: AppSnackBarKind.error);
       }
     } catch (e) {
       if (mounted) {
+        final nav = Navigator.of(context, rootNavigator: true);
+        if (nav.canPop()) {
+          nav.pop();
+        }
         AppSnackBar.show(context, message: '$e', kind: AppSnackBarKind.error);
       }
     }
@@ -638,13 +727,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
 
   Future<void> _prepareCropSession() async {
     final i = _editIndex;
-    if (i >= _slots.length || _slots[i].isVideo) {
-      if (mounted) {
-        setState(() {
-          _activeAdjust = null;
-          _clearCropSession();
-        });
-      }
+    if (i >= _slots.length) {
       return;
     }
     try {
@@ -707,10 +790,14 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
     if (!mounted) {
       return;
     }
-    setState(() => _cropWorking = false);
     switch (result) {
       case CropSuccess(:final croppedImage):
         final i = _editIndex;
+        if (i >= _slots.length) {
+          return;
+        }
+
+        setState(() => _cropWorking = false);
         try {
           final dir = await getTemporaryDirectory();
           final f = File('${dir.path}/post_crop_${DateTime.now().microsecondsSinceEpoch}.jpg');
@@ -729,6 +816,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
           _resetEditZoom();
         } catch (e) {
           if (mounted) {
+            setState(() => _cropWorking = false);
             AppSnackBar.show(
               context,
               message: 'Не удалось сохранить обрезку: $e',
@@ -738,6 +826,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         }
       case CropFailure(:final cause):
         if (mounted) {
+          setState(() => _cropWorking = false);
           AppSnackBar.show(context, message: '$cause', kind: AppSnackBarKind.error);
         }
     }
@@ -955,36 +1044,6 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (slot.isVideo)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(24, 18, 24, 20 + bottomInset * 0.5),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Для видео коррекция недоступна — файл уйдёт в пост как есть.',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyle.base(14, color: AppColors.postEditorOnSurfaceMuted, height: 1.4),
-                        ),
-                        const SizedBox(height: 14),
-                        FilledButton.icon(
-                          onPressed: () => _pickVideoCover(_editIndex),
-                          icon: const Icon(Icons.photo_size_select_actual_outlined, size: 20),
-                          label: Text(
-                            slot.videoPosterJpeg != null && slot.videoPosterJpeg!.isNotEmpty
-                                ? 'Изменить обложку'
-                                : 'Выбрать обложку',
-                          ),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: AppColors.surface,
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else ...[
                   AppIgAdjustPanel<_EditAdjustTool>(
                     imageLabel: 'Фильтр',
                     stripParams: _stripDisplayParams,
@@ -1010,8 +1069,6 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
                     ),
                   ),
                   SizedBox(height: 4 + bottomInset * 0.25),
-                ],
-                if (slot.isVideo) SizedBox(height: 8 + bottomInset * 0.35),
               ],
             ),
           ),
@@ -1303,11 +1360,6 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
             },
             itemBuilder: (context, i) {
               final s = _slots[i];
-              if (s.isVideo) {
-                return RepaintBoundary(
-                  child: Center(child: PostCreateVideoPreview(file: s.displayFile)),
-                );
-              }
               if (i == _editIndex) {
                 if (_activeAdjust == _EditAdjustTool.crop) {
                   if (_cropImageBytes == null) {
@@ -1396,7 +1448,6 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
 
   /// Превью кадра на шаге «Новый пост»: квадрат, как в Instagram.
   Widget _detailsIgMediaThumb(int i, {required double size, double radius = 4}) {
-    final s = _slots[i];
     final baked = _bakedForDetails[i];
     return GestureDetector(
       onTap: () => _openDetailsMediaViewer(i),
@@ -1405,36 +1456,7 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         child: SizedBox(
           width: size,
           height: size,
-          child: s.isVideo
-              ? (s.videoPosterJpeg != null && s.videoPosterJpeg!.isNotEmpty
-                    ? Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.memory(
-                            s.videoPosterJpeg!,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            filterQuality: FilterQuality.medium,
-                          ),
-                          Align(
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.play_circle_fill,
-                              color: Colors.white.withValues(alpha: 0.88),
-                              size: (size * 0.42).clamp(28.0, 44.0),
-                            ),
-                          ),
-                        ],
-                      )
-                    : ColoredBox(
-                        color: AppColors.inputBackground,
-                        child: Icon(
-                          Icons.play_circle_fill,
-                          color: AppColors.iconMuted.withValues(alpha: 0.9),
-                          size: (size * 0.42).clamp(28.0, 44.0),
-                        ),
-                      ))
-              : baked != null
+          child: baked != null
               ? Image.memory(
                   baked,
                   fit: BoxFit.cover,
@@ -1649,14 +1671,6 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
         ),
         const SizedBox(height: 14),
         AppTextField(
-          hintText: 'Подзаголовок (необязательно)',
-          controller: _subtitleCtrl,
-          maxLines: 4,
-          minLines: 1,
-          textCapitalization: TextCapitalization.sentences,
-        ),
-        const SizedBox(height: 14),
-        AppTextField(
           hintText: 'Описание (необязательно)',
           controller: _descriptionCtrl,
           maxLines: 8,
@@ -1742,20 +1756,88 @@ class _PostCreateFlowState extends State<_PostCreateFlow> {
                 ),
                 const SizedBox(height: 18),
                 AppTextField(
-                  hintText: 'Подзаголовок (необязательно)',
-                  controller: _subtitleCtrl,
-                  maxLines: 4,
-                  minLines: 1,
-                  textCapitalization: TextCapitalization.sentences,
-                ),
-                const SizedBox(height: 14),
-                AppTextField(
                   hintText: 'Описание (необязательно)',
                   controller: _descriptionCtrl,
                   maxLines: 8,
                   minLines: 3,
                   textCapitalization: TextCapitalization.sentences,
                 ),
+                if (widget.markerId != null && widget.markerId!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  Text(
+                    'Время сеанса (для этого поста)',
+                    style: AppTextStyle.base(14, color: AppColors.subTextColor, fontWeight: FontWeight.w700),
+                  ),
+                  if (_markerBoundsLoading) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Загружаем окно маркера…',
+                      style: AppTextStyle.base(13, color: AppColors.subTextColor.withValues(alpha: 0.85)),
+                    ),
+                  ] else if (_markerBoundsFailed || _markerForPost == null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Не удалось загрузить маркер для ограничений по времени.',
+                      style: AppTextStyle.base(13, color: AppColors.error.withValues(alpha: 0.9)),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'В пределах маркера: ${AppDateTimeSelector.formatRu(_markerForPost!.eventTime)} — '
+                      '${AppDateTimeSelector.formatRu(_markerForPost!.endTime)}',
+                      style: AppTextStyle.base(12, color: AppColors.subTextColor.withValues(alpha: 0.9), height: 1.35),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  IgnorePointer(
+                    ignoring: _markerBoundsLoading || _markerForPost == null,
+                    child: Opacity(
+                      opacity: (_markerBoundsLoading || _markerForPost == null) ? 0.45 : 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          AppDateTimeSelector(
+                            label: 'Начало',
+                            value: _sessionEventTime,
+                            min: _sessionPickerMin(),
+                            max: _sessionPickerMax(),
+                            minuteStep: 5,
+                            hint: 'Выбрать дату и время',
+                            onChanged: (dt) => setState(() {
+                              _sessionEventTime = dt;
+                              _clampSessionFieldsToMarker();
+                            }),
+                          ),
+                          const SizedBox(height: 10),
+                          AppDurationSelector(
+                            label: 'Длительность',
+                            minutes: _sessionDurationMinutes,
+                            minMinutes: _sessionDurationMinMinutes(),
+                            maxMinutes: _sessionDurationMaxMinutes(),
+                            stepMinutes: _sessionDurationStepMinutes(),
+                            onChanged: (m) => setState(() => _sessionDurationMinutes = m),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_sessionEventTime != null || _sessionDurationMinutes != null) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () => setState(() {
+                          _sessionEventTime = null;
+                          _sessionDurationMinutes = null;
+                        }),
+                        child: Text(
+                          'Очистить',
+                          style: AppTextStyle.base(14, color: AppColors.subTextColor, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 28),
                 _buildDetailsSettingsGroup(),
               ],
@@ -1808,11 +1890,7 @@ class _DetailsMediaViewerPageState extends State<_DetailsMediaViewerPage> {
             controller: _pageController,
             itemCount: widget.slots.length,
             itemBuilder: (context, i) {
-              final s = widget.slots[i];
               final baked = widget.bakedForDetails[i];
-              if (s.isVideo) {
-                return Center(child: PostCreateVideoPreview(file: s.displayFile));
-              }
               if (baked != null) {
                 return InteractiveViewer(
                   minScale: 0.85,

@@ -66,7 +66,6 @@ class _ProfileHeaderSquareCoverState extends State<ProfileHeaderSquareCover>
                     imageUrl: widget.imageUrl,
                     height: 150,
                     fit: BoxFit.cover,
-                    thumbWidth: 320,
                   ),
                 ),
               ),

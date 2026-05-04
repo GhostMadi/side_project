@@ -25,7 +25,7 @@
 | `../20260426110000_chat_read_by_peer_join_same_conversation.sql` | Уточнение join для **`read_by_peer`** (одна беседа). |
 | `../20260426120000_chat_child_tables_conversation_id.sql` | Дочерние таблицы сообщений с **`conversation_id`** (удобство фильтров Realtime / запросов). |
 | `../20260426130000_chat_participants_replica_identity_full.sql` | **`REPLICA IDENTITY FULL`** для **`chat_participants`** — полнота **old/new** в WAL для Realtime UPDATE (важно для подписок и отладки). |
-| `../20260427120000_chat_participants_select_no_rls_recursion.sql` | SELECT-политика **`chat_participants`** без рекурсии RLS (PostgREST / REST GET peer-курсоров). |
+| `../20260427120100_chat_participants_select_no_rls_recursion.sql` | SELECT-политика **`chat_participants`** без рекурсии RLS (PostgREST / REST GET peer-курсоров). |
 | `../20260427130000_chat_participants_grant_select_authenticated.sql` | **`GRANT SELECT`** на **`chat_participants`** для **`authenticated`** — клиентский REST для **`peerLastReadCursors`** (без grant PostgREST отдаёт 403). |
 | `../20260428120000_mark_conversation_read_monotonic_cursor.sql` | **`mark_conversation_read`**: курсор **`last_read_message_id`** только «вперёд» по шкале сообщений `(created_at, id)`, без отката на старый UUID. |
 | `../20260429120000_ensure_chat_participants_replica_identity_full.sql` | Идемпотентное повторное **`REPLICA IDENTITY FULL`** на **`chat_participants`** (если на окружении пропускали раннюю миграцию). |

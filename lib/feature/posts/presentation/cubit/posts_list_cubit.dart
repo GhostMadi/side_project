@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
@@ -17,6 +19,9 @@ class PostsListCubit extends Cubit<PostsListState> {
   String? _userId;
   String? _feedClusterId;
   bool _feedOnlyWithoutCluster = false;
+
+  /// Посты, привязанные к маркеру, не показываем в сетке «публикации» (есть отдельная вкладка).
+  final bool _excludeWithMarker = true;
   static const _pageSize = 24;
 
   void _setFeedFilterAll() {
@@ -63,6 +68,7 @@ class PostsListCubit extends Cubit<PostsListState> {
       final enriched = await _repository.listUserFeedEnrichedCursor(
         userId: userId,
         limit: _pageSize,
+        excludeWithMarker: _excludeWithMarker,
       );
       if (isClosed) return;
       final items = enriched.map((e) => e.post).toList(growable: false);
@@ -81,6 +87,7 @@ class PostsListCubit extends Cubit<PostsListState> {
       );
     } catch (e) {
       if (isClosed) return;
+      log('loadUserFeed: $e');
       emit(PostsListState.error('$e'));
     }
   }
@@ -96,6 +103,7 @@ class PostsListCubit extends Cubit<PostsListState> {
         userId: userId,
         limit: _pageSize,
         clusterId: clusterId,
+        excludeWithMarker: _excludeWithMarker,
       );
       if (isClosed) return;
       final items = enriched.map((e) => e.post).toList(growable: false);
@@ -143,6 +151,7 @@ class PostsListCubit extends Cubit<PostsListState> {
         userId: userId,
         limit: _pageSize,
         onlyWithoutCluster: true,
+        excludeWithMarker: _excludeWithMarker,
       );
       if (isClosed) return;
       final items = enriched.map((e) => e.post).toList(growable: false);
@@ -183,6 +192,7 @@ class PostsListCubit extends Cubit<PostsListState> {
         cursorPostId: last.id,
         clusterId: _feedClusterId,
         onlyWithoutCluster: _feedOnlyWithoutCluster,
+        excludeWithMarker: _excludeWithMarker,
       );
       if (isClosed) return;
       if (moreEnriched.isEmpty) {
@@ -226,10 +236,8 @@ class PostsListState with _$PostsListState {
   const factory PostsListState.initial() = _Initial;
 
   /// Загрузка ленты; [feedClusterId] / [feedWithoutCluster] — оптимистичный фильтр для UI до ответа API.
-  const factory PostsListState.loading({
-    String? feedClusterId,
-    @Default(false) bool feedWithoutCluster,
-  }) = _Loading;
+  const factory PostsListState.loading({String? feedClusterId, @Default(false) bool feedWithoutCluster}) =
+      _Loading;
   const factory PostsListState.loaded({
     required List<PostModel> items,
     required Map<String, PostListReaction> reactions,
@@ -243,4 +251,3 @@ class PostsListState with _$PostsListState {
   }) = _Loaded;
   const factory PostsListState.error(String message) = _Error;
 }
-

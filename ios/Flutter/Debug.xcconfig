@@ -1,2 +1,6 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
+
+// ffmpeg_kit_flutter_new prebuilt FFmpeg: arm64 slice is device (IOS); simulator slice is x86_64 only.
+// Generated.xcconfig only excludes i386 — without arm64 here, Apple Silicon simulators link the device dylib.
+EXCLUDED_ARCHS[sdk=iphonesimulator*] = arm64 i386

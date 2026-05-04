@@ -11,35 +11,50 @@ import 'package:side_project/feature/profile/data/models/profile_model.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_formatting.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header/profile_header_actions.dart';
+import 'package:side_project/feature/profile_page/presentation/widget/profile_marked_posts_grid.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_posts_tab_bar.dart';
+import 'package:side_project/feature/profile_page/presentation/widget/profile_posts_tab_content.dart';
 
 /// Контент профиля после загрузки: хедер, кластеры из Supabase, сетка постов.
-class ProfileLoadedBody extends StatelessWidget {
+class ProfileLoadedBody extends StatefulWidget {
   const ProfileLoadedBody({super.key, required this.profile});
 
   final ProfileModel profile;
+
+  @override
+  State<ProfileLoadedBody> createState() => _ProfileLoadedBodyState();
+}
+
+class _ProfileLoadedBodyState extends State<ProfileLoadedBody> {
+  int _tabIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ProfileHeaderFromModel(profile: profile),
-        OwnerClustersStrip(ownerId: profile.id),
-        const ProfilePostsTabBar(),
-        PostsListView(
-          onPostTap: (post) async {
-            final initialSaved = context.read<PostsListCubit>().state.maybeWhen(
-                  loaded: (_, __, savedByPostId, _, _, _, _) => savedByPostId[post.id],
-                  orElse: () => null,
-                );
-            final deleted = await context.router.push<bool>(
-              PostDetailRoute(post: post, initialIsSaved: initialSaved),
-            );
-            if (deleted == true && context.mounted) {
-              context.read<PostsListCubit>().reloadKeepingFilter();
-            }
-          },
+        _ProfileHeaderFromModel(profile: widget.profile),
+        OwnerClustersStrip(ownerId: widget.profile.id),
+        ProfilePostsTabBar(index: _tabIndex, onChanged: (i) => setState(() => _tabIndex = i)),
+        ProfilePostsTabContent(
+          index: _tabIndex,
+          onIndexChanged: (i) => setState(() => _tabIndex = i),
+          posts: PostsListView(
+            key: const ValueKey('posts'),
+            onPostTap: (post) async {
+              final initialSaved = context.read<PostsListCubit>().state.maybeWhen(
+                loaded: (_, __, savedByPostId, _, _, _, _) => savedByPostId[post.id],
+                orElse: () => null,
+              );
+              final deleted = await context.router.push<bool>(
+                PostDetailRoute(post: post, initialIsSaved: initialSaved),
+              );
+              if (deleted == true && context.mounted) {
+                context.read<PostsListCubit>().reloadKeepingFilter();
+              }
+            },
+          ),
+          markers: const ProfileMarkedPostsGrid(key: ValueKey('marked_posts')),
         ),
       ],
     );
@@ -97,6 +112,9 @@ class _ProfileHeaderFromModel extends StatelessWidget {
             break;
           case ProfileCreateContentKind.post:
             context.router.root.push(PostCreateRoute());
+            break;
+          case ProfileCreateContentKind.marker:
+            context.router.root.push(const MarkerCreateRoute());
             break;
         }
       },
