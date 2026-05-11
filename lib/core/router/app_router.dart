@@ -40,6 +40,7 @@ class AppRouter extends RootStackRouter {
     AutoRoute(page: MyAppointmentsRoute.page),
     AutoRoute(page: OrganizerProfileRoute.page),
     AutoRoute(page: FollowListsRoute.page),
+    AutoRoute(page: PartnerRoute.page),
     AutoRoute(page: PeopleSearchRoute.page),
     AutoRoute(page: GuestProfileRoute.page),
     AutoRoute(page: ProfileForGuestRoute.page),

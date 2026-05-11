@@ -5,7 +5,7 @@ import 'package:side_project/feature/chat/presentation/models/chat_thread_item.d
 /// Группа сообщений одного календарного дня (локальное время).
 class ChatDaySection {
   ChatDaySection({required this.day, required List<ChatThreadItem> messages})
-      : messagesAsc = List<ChatThreadItem>.from(messages);
+    : messagesAsc = List<ChatThreadItem>.from(messages);
 
   /// Дата без времени (локальная).
   final DateTime day;
@@ -22,11 +22,9 @@ DateTime _asLocalDay(DateTime t) {
 DateTime? _itemTime(ChatThreadItem item) {
   return item.when(
     server: (d) => d.message.createdAt.toLocal(),
-    optimisticText: (_, __, ___, createdAt, ____, _____, ______, _______, __________) =>
+    optimisticText: (_, __, ___, createdAt, ____, _____, ______, _______, __________) => createdAt.toLocal(),
+    optimisticAttachments: (_, __, createdAt, ___, ____, _____, ______, _______, __________, ___________) =>
         createdAt.toLocal(),
-    optimisticAttachments:
-        (_, __, createdAt, ___, ____, _____, ______, _______, __________, ___________) =>
-            createdAt.toLocal(),
   );
 }
 
@@ -51,11 +49,11 @@ String formatChatTime(DateTime t) => DateFormat('HH:mm').format(t.toLocal());
 
 /// Плашка «Сегодня» / «Вчера» / полная дата (RU).
 String formatChatDayHeader(DateTime day, {Locale? locale}) {
-  final loc = locale ?? const Locale('ru');
+  final loc = Locale((locale ?? const Locale('ru')).languageCode);
   final today = _asLocalDay(DateTime.now());
   final y = today.subtract(const Duration(days: 1));
   final d = _asLocalDay(day);
   if (d == today) return 'Сегодня';
   if (d == y) return 'Вчера';
-  return DateFormat.yMMMMd(loc.toString()).format(d);
+  return DateFormat.yMMMMd(loc.languageCode).format(d);
 }

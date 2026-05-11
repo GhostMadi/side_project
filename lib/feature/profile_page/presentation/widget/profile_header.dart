@@ -35,6 +35,7 @@ class ProfileHeader extends StatelessWidget {
     this.onFollowersTap,
     this.onFollowingTap,
     this.actionsRow,
+    this.secondaryActions,
   });
 
   final bool isLoading;
@@ -58,6 +59,7 @@ class ProfileHeader extends StatelessWidget {
   final VoidCallback? onFollowersTap;
   final VoidCallback? onFollowingTap;
   final Widget? actionsRow;
+  final Widget? secondaryActions;
 
   const ProfileHeader.loading({super.key})
     : isLoading = true,
@@ -80,7 +82,8 @@ class ProfileHeader extends StatelessWidget {
       informer = null,
       onFollowersTap = null,
       onFollowingTap = null,
-      actionsRow = null;
+      actionsRow = null,
+      secondaryActions = null;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +145,7 @@ class ProfileHeader extends StatelessWidget {
                     onMessage: onMessage,
                     onCreateContent: onCreateContent,
                   ),
+              if (secondaryActions != null) ...[const SizedBox(height: 12), secondaryActions!],
             ],
           ),
         ),

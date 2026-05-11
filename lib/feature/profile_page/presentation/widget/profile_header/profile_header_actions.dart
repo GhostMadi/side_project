@@ -66,6 +66,7 @@ class ProfileHeaderActionRow extends StatelessWidget {
         Expanded(
           child: AppOutlinedButton(text: 'Редактировать профиль', onPressed: onEditProfile, isExpanded: true),
         ),
+
         const SizedBox(width: 8),
         AppOutlinedButton(
           text: '',

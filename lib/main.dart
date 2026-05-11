@@ -7,14 +7,30 @@ import 'package:side_project/feature/app/app.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-    debug: supabaseHttpLoggingEnabled,
-    httpClient: supabaseHttpLoggingEnabled ? SupabaseLoggingHttpClient() : null,
-  );
-  await configureDependencies();
-  await initializeDateFormatting('ru', null);
-  runApp(const Application());
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    // 1. Initialize Supabase first
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+      debug: supabaseHttpLoggingEnabled,
+      httpClient: supabaseHttpLoggingEnabled ? SupabaseLoggingHttpClient() : null,
+    );
+
+    // 2. Load Dependencies
+    await configureDependencies();
+
+    // 3. Localization
+    await Future.wait([initializeDateFormatting('en', null), initializeDateFormatting('ru', null)]);
+
+    // 4. Force a tiny gap to let the Native bridge "breathe"
+    // This often fixes EXC_BAD_ACCESS during high-concurrency startups
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    runApp(const Application());
+  } catch (e, stack) {
+    debugPrint('Fatal Startup Error: $e');
+    debugPrint(stack.toString());
+  }
 }

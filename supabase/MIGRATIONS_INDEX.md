@@ -116,3 +116,17 @@
 
 ### Ленты / RPC (часть)
 - `20260411150000_list_user_feed_enriched_rpc.sql`, `20260411160000_hot_feed_enriched_profile_cursor.sql`, `20260416120000_user_feed_cluster_filter.sql` и др. — см. имена файлов в `supabase/migrations/`.
+
+### Профессиональный граф (Relations & Hiring)
+
+**Спека:** `supabase/SPEC_RELATIONS_SYSTEM.md` (создана 2026-05-04).
+
+| Файл | Назначение |
+|------|------------|
+| **`20260504054611_add_relations_system.sql`** | Таблица `public.relations` (каноническая пара `from_account_id < to_account_id`), флаги `hiring_enabled` / `open_for_memberships` в `profiles`. **Intent:** `request_relation(..., 'hire' \| 'join')`. **State machine:** `update_relation_status`. **Чтение:** RLS `SELECT` по участию в паре; DML только через `security definer` RPC. Доп. RPC: `get_my_relation_with(p_other)` — одна строка между `auth.uid()` и `p_other`. |
+
+#### Ключевые особенности реализации:
+*   **Canonical pair** — уникальность `(from_account_id, to_account_id)` без дублей направления.
+*   **Strict state machine** — `active` / `rejected` только получатель при `pending`; `terminated` только из `active` (оба участника).
+*   **RPC для изменений** — `request_relation`, `update_relation_status`; повторный `pending` только если строка была `rejected` или `terminated` (`ON CONFLICT DO UPDATE … WHERE`).
+*   **Row count** после upsert — явная проверка `GET DIAGNOSTICS … = ROW_COUNT` (нет зависимости от `FOUND` в вложенных блоках).

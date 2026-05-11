@@ -18,6 +18,12 @@ import '../../feature/archive_page/presentation/cubit/archived_markers_cubit.dar
     as _i379;
 import '../../feature/archive_page/presentation/cubit/archived_posts_cubit.dart'
     as _i258;
+import '../../feature/business_profile/data/business_profile_gate_listenable.dart'
+    as _i669;
+import '../../feature/business_profile/data/business_profile_repository.dart'
+    as _i845;
+import '../../feature/business_profile/presentation/cubit/business_profile_toggle_cubit.dart'
+    as _i711;
 import '../../feature/chat/data/messenger_user_search_service.dart' as _i159;
 import '../../feature/chat/data/repository/chat_repository.dart' as _i425;
 import '../../feature/chat/data/repository/chat_repository_impl.dart' as _i188;
@@ -70,16 +76,13 @@ import '../../feature/marker_tag/data/repository/marker_tag_repository.dart'
     as _i343;
 import '../../feature/marker_tag/presentation/cubit/marker_tag_cubit.dart'
     as _i150;
+import '../../feature/partners_page/data/relations_repository.dart' as _i620;
+import '../../feature/partners_page/presentation/cubit/partners_relations_cubit.dart'
+    as _i281;
 import '../../feature/personalization_page/data/account_actions_repository.dart'
     as _i90;
-import '../../feature/personalization_page/data/business_profile_gate_listenable.dart'
-    as _i603;
-import '../../feature/personalization_page/data/business_profile_repository.dart'
-    as _i758;
 import '../../feature/personalization_page/presentation/cubit/account_hibernate_reset_cubit.dart'
     as _i538;
-import '../../feature/personalization_page/presentation/cubit/business_profile_toggle_cubit.dart'
-    as _i641;
 import '../../feature/post_create_page/data/repository/post_create_repository.dart'
     as _i314;
 import '../../feature/post_create_page/presentation/cubit/post_create_cubit.dart'
@@ -99,6 +102,12 @@ import '../../feature/profile_categories/data/repository/profile_categories_repo
     as _i394;
 import '../../feature/profile_categories/presentation/cubit/profile_categories_cubit.dart'
     as _i122;
+import '../../feature/profile_hire/data/reposiotry/profile_hire_gate_listenable.dart'
+    as _i680;
+import '../../feature/profile_hire/data/reposiotry/profile_hire_mine.dart'
+    as _i431;
+import '../../feature/profile_hire/presentation/cubit/profile_hire_toggle_cubit.dart'
+    as _i187;
 import '../../feature/profile_page/data/repository/profile_markers_repository.dart'
     as _i377;
 import '../../feature/profile_page/presentation/cubit/profile_marker_linked_posts_cubit.dart'
@@ -126,6 +135,7 @@ import '../storage/prefs/chat_thread_cache_storage.dart' as _i631;
 import '../storage/prefs/post_reactions_prefs_storage.dart' as _i690;
 import '../storage/prefs/post_saves_prefs_storage.dart' as _i31;
 import '../storage/prefs/profile_follow_status_prefs_storage.dart' as _i370;
+import '../storage/prefs/profile_hire_cache_storage.dart' as _i41;
 import '../storage/prefs/profile_mini_cache_storage.dart' as _i1030;
 import 'app_module.dart' as _i460;
 
@@ -140,8 +150,11 @@ extension GetItInjectableX on _i174.GetIt {
     await gh.factoryAsync<_i214.Isar>(() => appModule.isar, preResolve: true);
     gh.factory<_i1003.MapFiltersCubit>(() => _i1003.MapFiltersCubit());
     gh.lazySingleton<_i454.SupabaseClient>(() => appModule.supabaseClient);
-    gh.lazySingleton<_i603.BusinessProfileGateListenable>(
-      () => _i603.BusinessProfileGateListenable(),
+    gh.lazySingleton<_i669.BusinessProfileGateListenable>(
+      () => _i669.BusinessProfileGateListenable(),
+    );
+    gh.lazySingleton<_i680.ProfileHireGateListenable>(
+      () => _i680.ProfileHireGateListenable(),
     );
     gh.lazySingleton<_i722.AuthRepository>(
       () => _i722.AuthRepositoryImpl(gh<_i454.SupabaseClient>()),
@@ -160,6 +173,9 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i379.ArchivedMarkersCubit>(
       () => _i379.ArchivedMarkersCubit(gh<_i454.SupabaseClient>()),
+    );
+    gh.lazySingleton<_i620.RelationsRepository>(
+      () => _i620.RelationsRepositoryImpl(gh<_i454.SupabaseClient>()),
     );
     gh.lazySingleton<_i377.ProfileMarkersRepository>(
       () => _i377.ProfileMarkersRepositoryImpl(gh<_i454.SupabaseClient>()),
@@ -182,6 +198,9 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i370.ProfileFollowStatusPrefsStorage>(
       () => _i370.ProfileFollowStatusPrefsStorage(gh<_i765.IsarKvStore>()),
     );
+    gh.lazySingleton<_i41.ProfileHireCacheStorage>(
+      () => _i41.ProfileHireCacheStorage(gh<_i765.IsarKvStore>()),
+    );
     gh.lazySingleton<_i1030.ProfileMiniCacheStorage>(
       () => _i1030.ProfileMiniCacheStorage(gh<_i765.IsarKvStore>()),
     );
@@ -200,13 +219,6 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i641.CountriesRepository>(
       () => _i646.CountriesRepositoryImpl(gh<_i454.SupabaseClient>()),
     );
-    gh.lazySingleton<_i758.BusinessProfileRepository>(
-      () => _i758.BusinessProfileRepositoryImpl(
-        gh<_i454.SupabaseClient>(),
-        gh<_i215.BusinessProfileCacheStorage>(),
-        gh<_i603.BusinessProfileGateListenable>(),
-      ),
-    );
     gh.lazySingleton<_i42.ProfileRepository>(
       () => _i681.ProfileRepositoryImpl(
         gh<_i454.SupabaseClient>(),
@@ -215,11 +227,6 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i178.MarkerPostLinksRepository>(
       () => _i178.MarkerPostLinksRepositoryImpl(gh<_i454.SupabaseClient>()),
-    );
-    gh.factory<_i641.BusinessProfileToggleCubit>(
-      () => _i641.BusinessProfileToggleCubit(
-        gh<_i758.BusinessProfileRepository>(),
-      ),
     );
     gh.lazySingleton<_i343.MarkerTagRepository>(
       () => _i343.MarkerTagRepositoryImpl(gh<_i454.SupabaseClient>()),
@@ -261,15 +268,23 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i122.ProfileFollowingListCubit>(
       () => _i122.ProfileFollowingListCubit(gh<_i838.FollowListRepository>()),
     );
+    gh.lazySingleton<_i845.BusinessProfileRepository>(
+      () => _i845.BusinessProfileRepositoryImpl(
+        gh<_i454.SupabaseClient>(),
+        gh<_i215.BusinessProfileCacheStorage>(),
+        gh<_i669.BusinessProfileGateListenable>(),
+      ),
+    );
+    gh.lazySingleton<_i431.ProfileHireRepository>(
+      () => _i431.ProfileHireRepositoryImpl(
+        gh<_i454.SupabaseClient>(),
+        gh<_i41.ProfileHireCacheStorage>(),
+        gh<_i669.BusinessProfileGateListenable>(),
+        gh<_i680.ProfileHireGateListenable>(),
+      ),
+    );
     gh.lazySingleton<_i97.AppLocaleCubit>(
       () => _i97.AppLocaleCubit(gh<_i263.AppLocalePrefsStorage>()),
-    );
-    gh.lazySingleton<_i917.AuthCubit>(
-      () => _i917.AuthCubit(
-        gh<_i722.AuthRepository>(),
-        gh<_i215.BusinessProfileCacheStorage>(),
-        gh<_i603.BusinessProfileGateListenable>(),
-      ),
     );
     gh.lazySingleton<_i1024.CountriesCubit>(
       () => _i1024.CountriesCubit(gh<_i641.CountriesRepository>()),
@@ -290,8 +305,17 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i744.CitiesCubit>(
       () => _i744.CitiesCubit(gh<_i969.CitiesRepository>()),
     );
+    gh.factory<_i187.HiringToggleCubit>(
+      () => _i187.HiringToggleCubit(gh<_i431.ProfileHireRepository>()),
+    );
+    gh.factory<_i187.MembershipToggleCubit>(
+      () => _i187.MembershipToggleCubit(gh<_i431.ProfileHireRepository>()),
+    );
     gh.factory<_i908.ChatMessageSendCubit>(
       () => _i908.ChatMessageSendCubit(gh<_i425.ChatRepository>()),
+    );
+    gh.factory<_i281.PartnersRelationsCubit>(
+      () => _i281.PartnersRelationsCubit(gh<_i620.RelationsRepository>()),
     );
     gh.lazySingleton<_i423.SavedListRepository>(
       () => _i423.SavedListRepositoryImpl(
@@ -304,6 +328,19 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.factory<_i366.ProfileSearchCubit>(
       () => _i366.ProfileSearchCubit(gh<_i42.ProfileRepository>()),
+    );
+    gh.factory<_i711.BusinessProfileToggleCubit>(
+      () => _i711.BusinessProfileToggleCubit(
+        gh<_i845.BusinessProfileRepository>(),
+      ),
+    );
+    gh.lazySingleton<_i917.AuthCubit>(
+      () => _i917.AuthCubit(
+        gh<_i722.AuthRepository>(),
+        gh<_i215.BusinessProfileCacheStorage>(),
+        gh<_i669.BusinessProfileGateListenable>(),
+        gh<_i680.ProfileHireGateListenable>(),
+      ),
     );
     gh.factory<_i150.MarkerTagCubit>(
       () => _i150.MarkerTagCubit(gh<_i343.MarkerTagRepository>()),

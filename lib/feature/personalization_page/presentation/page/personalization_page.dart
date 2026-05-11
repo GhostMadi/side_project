@@ -14,16 +14,18 @@ import 'package:side_project/core/shared/app_dialog.dart';
 import 'package:side_project/core/shared/app_list_item.dart';
 import 'package:side_project/core/shared/app_pill_back_nav_overlay.dart';
 import 'package:side_project/core/shared/app_snack_bar.dart';
+import 'package:side_project/core/storage/prefs/business_profile_cache_storage.dart';
 import 'package:side_project/core/storage/prefs/post_reactions_prefs_storage.dart';
 import 'package:side_project/core/storage/prefs/post_saves_prefs_storage.dart';
-import 'package:side_project/core/storage/prefs/business_profile_cache_storage.dart';
 import 'package:side_project/core/storage/prefs/profile_follow_status_prefs_storage.dart';
 import 'package:side_project/core/storage/prefs/profile_mini_cache_storage.dart';
-import 'package:side_project/feature/personalization_page/data/business_profile_gate_listenable.dart';
+import 'package:side_project/feature/business_profile/data/business_profile_gate_listenable.dart';
+import 'package:side_project/feature/business_profile/presentation/widget/business_profile_toggle_sheet.dart';
 import 'package:side_project/feature/login_page/data/repository/auth_repository.dart';
 import 'package:side_project/feature/login_page/presentation/cubit/auth_cubit.dart';
 import 'package:side_project/feature/personalization_page/presentation/cubit/account_hibernate_reset_cubit.dart';
-import 'package:side_project/feature/personalization_page/presentation/widget/business_profile_toggle_sheet.dart';
+import 'package:side_project/feature/profile_hire/data/reposiotry/profile_hire_gate_listenable.dart';
+import 'package:side_project/feature/profile_hire/presentation/widget/hire_toggle_sheet.dart';
 
 /// Экран «Персонализация» (бизнес-аккаунт, спящий режим).
 @RoutePage()
@@ -75,6 +77,7 @@ class _PersonalizationPageState extends State<PersonalizationPage> {
     await sl<ProfileFollowStatusPrefsStorage>().writeCached(uid, {});
     await sl<BusinessProfileCacheStorage>().clear(uid);
     sl<BusinessProfileGateListenable>().notifyGateChanged();
+    sl<ProfileHireGateListenable>().notifyGateChanged();
   }
 
   Future<void> _signOutAndOpenLogin(BuildContext dialogContext) async {
@@ -152,6 +155,21 @@ class _PersonalizationPageState extends State<PersonalizationPage> {
                           leading: Icon(Icons.storefront_outlined, color: AppColors.btnBackground),
                           trailing: chevron,
                           onTap: busy ? () {} : () => BusinessProfileToggleSheet.show(context),
+                        ),
+                        SizedBox(height: AppDimensions.spaceJunior),
+                        AppListTile(
+                          title: Text(
+                            'Партнеры',
+                            style: AppTextStyle.base(
+                              16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textColor,
+                            ),
+                          ),
+
+                          leading: Icon(Icons.group_outlined, color: AppColors.btnBackground),
+                          trailing: chevron,
+                          onTap: busy ? () {} : () => ProfileHireSettingsSheet.show(context),
                         ),
                         SizedBox(height: AppDimensions.spaceJunior),
                         AppListTile(

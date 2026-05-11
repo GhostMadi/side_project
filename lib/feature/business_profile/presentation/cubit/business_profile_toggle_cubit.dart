@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
-import 'package:side_project/feature/personalization_page/data/business_profile_repository.dart';
+import 'package:side_project/feature/business_profile/data/business_profile_repository.dart';
 
 part 'business_profile_toggle_cubit.freezed.dart';
 

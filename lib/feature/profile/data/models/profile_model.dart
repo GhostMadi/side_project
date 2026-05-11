@@ -36,6 +36,8 @@ class ProfileModel {
     this.usernameNextChangeAllowedAt,
     this.createdAt,
     this.updatedAt,
+    this.hiringEnabled = false,
+    this.openForMemberships = false,
   });
 
   final String id;
@@ -77,6 +79,12 @@ class ProfileModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  /// `profiles.hiring_enabled` — ищу людей / предлагаю найм.
+  final bool hiringEnabled;
+
+  /// `profiles.open_for_memberships` — готов вступить в чужую команду / принимаю заявки.
+  final bool openForMemberships;
+
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
     final rawCountry = (json['country_code'] as String?)?.trim();
     final rawCity = (json['city_code'] as String?)?.trim();
@@ -110,6 +118,8 @@ class ProfileModel {
       usernameNextChangeAllowedAt: _parseDate(json['username_next_change_allowed_at']),
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
+      hiringEnabled: json['hiring_enabled'] == true,
+      openForMemberships: json['open_for_memberships'] == true,
     );
   }
 

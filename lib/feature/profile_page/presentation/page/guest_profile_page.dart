@@ -24,6 +24,7 @@ import 'package:side_project/feature/profile_page/presentation/page/profile_page
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_formatting.dart';
 import 'package:side_project/feature/profile_page/presentation/page/profile_page_scroll_shell.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_header.dart';
+import 'package:side_project/feature/profile_page/presentation/widget/profile_relation_footer.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_marked_posts_grid.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_posts_tab_bar.dart';
 import 'package:side_project/feature/profile_page/presentation/widget/profile_posts_tab_content.dart';
@@ -282,6 +283,7 @@ class GuestProfileLoadedBody extends StatelessWidget {
             initialIsFollowing: initialIsFollowing,
             onChanged: onFollowChanged,
           ),
+          secondaryActions: ProfileRelationFooter(targetProfile: profile),
         ),
         // Остальное (кластеры/посты) идёт ниже через `ProfilePageScrollShell` и кубиты.
       ],

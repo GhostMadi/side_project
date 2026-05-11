@@ -254,7 +254,7 @@ String _showRepliesButtonLabel(int n) {
 String _formatCommentCount(int n, BuildContext context) {
   var v = n;
   if (v < 0) v = 0;
-  final tag = Localizations.localeOf(context).toLanguageTag();
+  final tag = Localizations.localeOf(context).languageCode;
   if (v < 10000) {
     return NumberFormat.decimalPattern(tag).format(v);
   }

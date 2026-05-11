@@ -7,7 +7,7 @@ import 'package:side_project/core/dependencies/get_it.dart';
 import 'package:side_project/core/router/app_router.gr.dart';
 import 'package:side_project/feature/app/widget/app_bottom_bar.dart';
 import 'package:side_project/feature/chat/presentation/cubit/chat_conversations_list_cubit.dart';
-import 'package:side_project/feature/personalization_page/data/business_profile_repository.dart';
+import 'package:side_project/feature/business_profile/data/business_profile_repository.dart';
 
 @RoutePage()
 class ApplicationPage extends StatefulWidget {

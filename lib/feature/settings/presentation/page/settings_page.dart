@@ -13,9 +13,9 @@ import 'package:side_project/core/shared/app_list_item.dart';
 import 'package:side_project/core/shared/app_pill_back_nav_overlay.dart';
 import 'package:side_project/core/shared/app_shimmer.dart';
 import 'package:side_project/core/storage/prefs/business_profile_cache_storage.dart';
+import 'package:side_project/feature/business_profile/data/business_profile_gate_listenable.dart';
+import 'package:side_project/feature/business_profile/data/business_profile_repository.dart';
 import 'package:side_project/feature/login_page/presentation/cubit/auth_cubit.dart';
-import 'package:side_project/feature/personalization_page/data/business_profile_gate_listenable.dart';
-import 'package:side_project/feature/personalization_page/data/business_profile_repository.dart';
 
 @RoutePage()
 class SettingsPage extends StatefulWidget {
@@ -172,6 +172,20 @@ class _SettingsPageState extends State<SettingsPage> {
               SizedBox(height: AppDimensions.spaceJunior),
               AppListTile(
                 title: Text(
+                  'Связи и заявки',
+                  style: AppTextStyle.base(16, fontWeight: FontWeight.w600, color: AppColors.textColor),
+                ),
+                subtitle: Text(
+                  'Найм, вступление в команду, входящие и исходящие заявки',
+                  style: AppTextStyle.base(13, height: 1.3, color: AppColors.subTextColor),
+                ),
+                leading: Icon(Icons.handshake_outlined, color: AppColors.btnBackground),
+                trailing: chevron,
+                onTap: () => context.router.push(const PartnerRoute()),
+              ),
+              SizedBox(height: AppDimensions.spaceJunior),
+              AppListTile(
+                title: Text(
                   'Архивированные',
                   style: AppTextStyle.base(16, fontWeight: FontWeight.w600, color: AppColors.textColor),
                 ),
@@ -218,10 +232,7 @@ class _BizSectionShimmer extends StatelessWidget {
       return AppShimmer(
         child: Container(
           height: 74,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceSoft,
-            borderRadius: BorderRadius.circular(12),
-          ),
+          decoration: BoxDecoration(color: AppColors.surfaceSoft, borderRadius: BorderRadius.circular(12)),
         ),
       );
     }

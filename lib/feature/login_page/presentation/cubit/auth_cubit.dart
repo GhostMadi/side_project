@@ -5,14 +5,15 @@ import 'package:injectable/injectable.dart';
 import 'package:side_project/core/storage/prefs/business_profile_cache_storage.dart';
 import 'package:side_project/feature/login_page/data/model/auth_user.dart';
 import 'package:side_project/feature/login_page/data/repository/auth_repository.dart';
-import 'package:side_project/feature/personalization_page/data/business_profile_gate_listenable.dart';
+import 'package:side_project/feature/business_profile/data/business_profile_gate_listenable.dart';
+import 'package:side_project/feature/profile_hire/data/reposiotry/profile_hire_gate_listenable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthApiException;
 
 part 'auth_cubit.freezed.dart';
 
 @lazySingleton
 class AuthCubit extends Cubit<AuthState> {
-  AuthCubit(this._repository, this._businessProfileCache, this._businessProfileGateListen)
+  AuthCubit(this._repository, this._businessProfileCache, this._businessProfileGateListen, this._profileHireGateListen)
       : super(const AuthState.initial()) {
     checkAuthStatus();
   }
@@ -20,6 +21,7 @@ class AuthCubit extends Cubit<AuthState> {
   final AuthRepository _repository;
   final BusinessProfileCacheStorage _businessProfileCache;
   final BusinessProfileGateListenable _businessProfileGateListen;
+  final ProfileHireGateListenable _profileHireGateListen;
 
   void checkAuthStatus() {
     final user = _repository.currentUser;
@@ -60,6 +62,7 @@ class AuthCubit extends Cubit<AuthState> {
       if (uid != null && uid.isNotEmpty) {
         await _businessProfileCache.clear(uid);
         _businessProfileGateListen.notifyGateChanged();
+        _profileHireGateListen.notifyGateChanged();
       }
       await _repository.signOut();
       emit(const AuthState.unauthenticated());

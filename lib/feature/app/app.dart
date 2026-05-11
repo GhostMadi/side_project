@@ -30,12 +30,14 @@ class _ApplicationState extends State<Application> {
   @override
   void initState() {
     super.initState();
-    // Yandex MapKit: ключ задаётся в android/.../MainApplication.kt и ios/Runner/AppDelegate.swift
-
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.signedOut) {
-        _appRouter.replaceAll([const LoginRoute()]);
-      }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+        if (data.event == AuthChangeEvent.signedOut) {
+          if (mounted) {
+            _appRouter.replaceAll([const LoginRoute()]);
+          }
+        }
+      });
     });
   }
 
@@ -73,8 +75,9 @@ class _ApplicationState extends State<Application> {
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               localeResolutionCallback: (deviceLocale, supported) {
                 if (deviceLocale == null) return supported.first;
+                final normalizedDeviceLocale = Locale(deviceLocale.languageCode);
                 for (final l in supported) {
-                  if (l.languageCode == deviceLocale.languageCode) return l;
+                  if (l.languageCode == normalizedDeviceLocale.languageCode) return l;
                 }
                 return AppSupportedLocales.matchDeviceOrFallback(deviceLocale);
               },

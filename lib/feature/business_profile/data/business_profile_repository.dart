@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
 import 'package:side_project/core/storage/prefs/business_profile_cache_storage.dart';
-import 'package:side_project/feature/personalization_page/data/business_profile_gate_listenable.dart';
+import 'package:side_project/feature/business_profile/data/business_profile_gate_listenable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum BusinessProfileStatus {

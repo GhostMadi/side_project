@@ -7,7 +7,7 @@ import 'package:side_project/core/shared/app_bottom_sheet.dart';
 import 'package:side_project/core/shared/app_circular_progress_indicator.dart';
 import 'package:side_project/core/shared/app_snack_bar.dart';
 import 'package:side_project/core/shared/app_tile_toggle.dart';
-import 'package:side_project/feature/personalization_page/presentation/cubit/business_profile_toggle_cubit.dart';
+import 'package:side_project/feature/business_profile/presentation/cubit/business_profile_toggle_cubit.dart';
 
 /// Ожидаемая высота ряда с переключателем после загрузки — лоадер не растягивает шторку на весь экран.
 const double _kToggleSheetSkeletonHeight = 104;
